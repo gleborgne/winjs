@@ -651,14 +651,20 @@ define([
         // - timing: String representing the CSS timing function that controls the progress of the animation.
         // - to: The value of *element*'s transform property after the animation.
         var duration = transition.duration * _TransitionAnimation._animationFactor;
-        element.style.transition = duration + "ms " + transformNames.cssName + " " + transition.timing;
+        var transitionProperty = _BaseUtils._browserStyleEquivalents["transition"].scriptName;
+        element.style[transitionProperty] = duration + "ms " + transformNames.cssName + " " + transition.timing;
         element.style[transformNames.scriptName] = transition.to;
     
+        var finish;
         return new Promise(function (c) {
-            var finish = function () {
-                clearTimeout(timeoutId);
-                element.removeEventListener("transitionend", finish);
-                element.style.transition = "";
+            var didFinish = false;
+            finish = function () {
+                if (!didFinish) {
+                    clearTimeout(timeoutId);
+                    element.removeEventListener("transitionend", finish);
+                    element.style[transitionProperty] = "";
+                    didFinish = true;
+                }
                 c();
             };
     
@@ -668,6 +674,8 @@ define([
             }, 50);
     
             element.addEventListener("transitionend", finish);
+        }, function () {
+            finish(); // On cancelation, complete the promise successfully to match PVL
         });
     }
     // See _resizeTransition's comment for documentation on *args*.
