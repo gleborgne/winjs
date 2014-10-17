@@ -598,9 +598,22 @@ define([
                 },
 
                 _updateData: function _AppBarMenuLayout_updateData(data) {
+                    var hadHiddenClass = _ElementUtilities.hasClass(this.appBarEl, _Constants.hiddenClass);
+                    _ElementUtilities.removeClass(this.appBarEl, _Constants.hiddenClass);
+
+                    // Make sure AppBar and children have width dimensions.
+                    var prevAppBarDisplay = this.appBarEl.style.display;
+                    this.appBarEl.style.display = "";
+
                     this._toolbar.data = new BindingList.List(data);
-                    if (_ElementUtilities.hasClass(this.appBarEl, _Constants.hiddenClass)) {
+                    if (hadHiddenClass) {
                         this._positionToolbar();
+                    }
+
+                    // Restore state to AppBar.
+                    this.appBarEl.style.display = prevAppBarDisplay;
+                    if (hadHiddenClass) {
+                        _ElementUtilities.addClass(this.appBarEl, _Constants.hiddenClass);
                     }
                 },
 
