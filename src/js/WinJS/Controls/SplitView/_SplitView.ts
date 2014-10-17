@@ -144,6 +144,10 @@ function fadeIn(elements: any): Promise<any> {
     return cancelablePromise(Animations.fadeIn(elements));
 }
 
+function resizeTransition(elementClipper: HTMLElement, element: HTMLElement, options: { from: IThickness; to: IThickness; dimension: string; anchorTrailingEdge: boolean; }): Promise<any> {
+    return cancelablePromise(Animations._resizeTransition(elementClipper, element, options));
+}
+
 //
 // State machine
 //
@@ -844,7 +848,7 @@ export class SplitView {
             
             if (peek) {
                 var placementRight = this._rtl ? Placement.left : Placement.right;
-                return _ElementUtilities._resizeTransition(this._dom.paneWrapper, this._dom.pane, {
+                return resizeTransition(this._dom.paneWrapper, this._dom.pane, {
                     from: hiddenPaneThickness,
                     to: shownPaneThickness,
                     dimension: dim,
@@ -890,7 +894,7 @@ export class SplitView {
             
             if (peek) {
                 var placementRight = this._rtl ? Placement.left : Placement.right;
-                return _ElementUtilities._resizeTransition(this._dom.paneWrapper, this._dom.pane, {
+                return resizeTransition(this._dom.paneWrapper, this._dom.pane, {
                     from: shownPaneThickness,
                     to: hiddenPaneThickness,
                     dimension: dim,
