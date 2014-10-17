@@ -599,11 +599,13 @@ define([
 
                 _updateData: function _AppBarMenuLayout_updateData(data) {
                     var hadHiddenClass = _ElementUtilities.hasClass(this.appBarEl, _Constants.hiddenClass);
+                    var hadShownClass = _ElementUtilities.hasClass(this.appBarEl, _Constants.shownClass);
                     _ElementUtilities.removeClass(this.appBarEl, _Constants.hiddenClass);
 
                     // Make sure AppBar and children have width dimensions.
                     var prevAppBarDisplay = this.appBarEl.style.display;
                     this.appBarEl.style.display = "";
+
 
                     this._toolbar.data = new BindingList.List(data);
                     if (hadHiddenClass) {
@@ -614,6 +616,11 @@ define([
                     this.appBarEl.style.display = prevAppBarDisplay;
                     if (hadHiddenClass) {
                         _ElementUtilities.addClass(this.appBarEl, _Constants.hiddenClass);
+                    }
+
+                    if (hadShownClass) {
+                        this._positionToolbar();
+                        this._animateToolbarEntrance()
                     }
                 },
 
@@ -694,6 +701,11 @@ define([
                     var menuOffset = this._toolbarEl.offsetHeight - ((this._isMinimal() && !this._isBottom()) ? 0 : this.appBarEl.offsetHeight);
                     var toolbarOffset = this._toolbarEl.offsetHeight - (this._isMinimal() ? 0 : this.appBarEl.offsetHeight);
 
+                    // Ensure that initial position is correct
+                    this._toolbarContainer.style[this._tranformNames.scriptName] = "";
+                    this._menu.style[this._tranformNames.scriptName] = "";
+                    this._toolbarEl.style[this._tranformNames.scriptName] = "";
+                    
                     this._toolbarContainer.style[this._tranformNames.scriptName] = "translateY(0px)";
                     this._menu.style[this._tranformNames.scriptName] = "translateY(-" + menuOffset + 'px)';
                     this._toolbarEl.style[this._tranformNames.scriptName] = "translateY(" + toolbarOffset + 'px)';
