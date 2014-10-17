@@ -481,7 +481,7 @@ define([
                     this._originalCommands = [];
 
                     var that = this;
-                    commands.forEach(function(command) {
+                    commands.forEach(function (command) {
                          that._originalCommands.push(that.sanitizeCommand(command));
                     });
                     this._displayedCommands = this._originalCommands.slice(0);
@@ -505,23 +505,47 @@ define([
                 },
 
                 showCommands: function _AppBarMenuLayout_showCommands(commands) {
-                    this._toolbar.data = new BindingList.List();
+                    var elements = this._getCommandsElements(commands);
+                    var data = [];
+                    var newDisplayedCommands = [];
+                    var that = this;
+                    this._originalCommands.forEach(function (command) {
+                        if (elements.indexOf(command.element) >= 0 || that._displayedCommands.indexOf(command) >= 0) {
+                            newDisplayedCommands.push(command);
+                            data.push(command);
+                        }
+                    });
+                    this._displayedCommands = newDisplayedCommands;
+                    this._updateData(data);
                 },
 
                 showOnlyCommands: function _AppBarMenuLayout_showOnlyCommands(commands) {
                     var elements = this._getCommandsElements(commands);
                     var data = [];
+                    this._displayedCommands = [];
                     var that = this;
                     this._originalCommands.forEach(function (command) {
                         if (elements.indexOf(command.element) >= 0) {
+                            that._displayedCommands.push(command);
                             data.push(command);
                         }
                     });
-                    this._toolbar.data = new BindingList.List(data);
+                    this._updateData(data);
                 },
 
                 hideCommands: function _AppBarMenuLayout_hideCommands(commands) {
-                    this._toolbar.data = new BindingList.List();
+                    var elements = this._getCommandsElements(commands);
+                    var data = [];
+                    var newDisplayedCommands = [];
+                    var that = this;
+                    this._originalCommands.forEach(function (command) {
+                        if (elements.indexOf(command.element) === -1 && that._displayedCommands.indexOf(command) >= 0) {
+                            newDisplayedCommands.push(command);
+                            data.push(command);
+                        }
+                    });
+                    this._displayedCommands = newDisplayedCommands;
+                    this._updateData(data);
                 },
 
                 connect: function _AppBarMenuLayout_connect(appBarEl) {
@@ -571,6 +595,13 @@ define([
                     }
                     this._originalCommands = [];
                     this._displayedCommands = [];
+                },
+
+                _updateData: function _AppBarMenuLayout_updateData(data) {
+                    this._toolbar.data = new BindingList.List(data);
+                    if (_ElementUtilities.hasClass(this.appBarEl, _Constants.hiddenClass)) {
+                        this._positionToolbar();
+                    }
                 },
 
                 _getCommandsElements: function _AppBarMenuLayout_getCommandsElements(commands) {
