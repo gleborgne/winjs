@@ -520,17 +520,8 @@ define([
                 },
 
                 showOnlyCommands: function _AppBarMenuLayout_showOnlyCommands(commands) {
-                    var elements = this._getCommandsElements(commands);
-                    var data = [];
                     this._displayedCommands = [];
-                    var that = this;
-                    this._originalCommands.forEach(function (command) {
-                        if (elements.indexOf(command.element) >= 0) {
-                            that._displayedCommands.push(command);
-                            data.push(command);
-                        }
-                    });
-                    this._updateData(data);
+                    this.showCommands(commands);
                 },
 
                 hideCommands: function _AppBarMenuLayout_hideCommands(commands) {
@@ -705,7 +696,7 @@ define([
                     this._toolbarContainer.style[this._tranformNames.scriptName] = "";
                     this._menu.style[this._tranformNames.scriptName] = "";
                     this._toolbarEl.style[this._tranformNames.scriptName] = "";
-                    
+
                     this._toolbarContainer.style[this._tranformNames.scriptName] = "translateY(0px)";
                     this._menu.style[this._tranformNames.scriptName] = "translateY(-" + menuOffset + 'px)';
                     this._toolbarEl.style[this._tranformNames.scriptName] = "translateY(" + toolbarOffset + 'px)';
