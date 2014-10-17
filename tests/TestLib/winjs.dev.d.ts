@@ -14,6 +14,13 @@ interface IStyleEquivalentsMap {
 }
 
 declare module WinJS {
+    
+    interface IPosition {
+        left: number;
+        top: number;
+        width: number;
+        height: number;
+    }
 
     class _Signal<T> {
         constructor(oncancel?: Function);
@@ -27,6 +34,7 @@ declare module WinJS {
     module Utilities {
         function _bubbleEvent(element: HTMLElement, type: string, eventObject: any): void;
         function _setImmediate(func: () => any): void;
+        export function _getPositionRelativeTo(element: HTMLElement, ancestor: HTMLElement): IPosition;
 
         module _resizeNotifier {
             function subscribe(element: HTMLElement, handler): void;
@@ -199,6 +207,54 @@ declare module WinJS {
             _dom: IContentDialogDom;
             _updateTabIndices();
             _updateTabIndicesImpl();
+        }
+        
+        class SplitView {
+            static Placement: {
+                left: string;
+                right: string;
+                top: string;
+                bottom: string;
+            }
+            static ShownDisplayMode: {
+                overlay: string;
+                inline: string;
+            }
+            
+            constructor(element?: HTMLElement, options?: any);
+            element: HTMLElement;
+            paneElement: HTMLElement;
+            contentElement: HTMLElement;
+            placement: string;
+            shownDisplayMode: string;
+            hidden: boolean;
+            showPane(): void;
+            hidePane(): void;
+            dispose(): void;
+            addEventListener(type: string, listener: Function, useCapture?: boolean): void;
+            removeEventListener(type: string, listener: Function, useCapture?: boolean): void;
+            onbeforeshow(eventInfo: Event): void;
+            onaftershow(eventInfo: Event): void;
+            onbeforehide(eventInfo: Event): void;
+            onafterhide(eventInfo: Event): void;
+        }
+        
+        class PrivateSplitView extends WinJS.UI.SplitView {
+            static _ClassNames: {
+                splitView: string;
+                pane: string;
+                content: string;
+                // hidden/shown
+                paneHidden: string;
+                paneShown: string;
+            }
+            
+            _playShowAnimation(): Promise<any>;
+            _playHideAnimation(): Promise<any>;
+            _prepareAnimation(paneRect: any, contentRect: any): void;
+            _clearAnimation(): void;
+            _disposed: boolean;
+            _state: any;
         }
 
         interface ISelect {

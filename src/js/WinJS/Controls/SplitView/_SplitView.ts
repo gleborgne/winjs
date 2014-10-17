@@ -681,6 +681,7 @@ export class SplitView {
         contentStyle.width = contentRect.contentWidth + "px";
     }
     
+    // Overridden by tests.
     private _prepareAnimation(paneRect: IRect, contentRect: IRect): void {
         var paneWrapperStyle = this._dom.paneWrapper.style;
         paneWrapperStyle.position = "absolute";
@@ -696,6 +697,7 @@ export class SplitView {
         this._setContentRect(contentRect);
     }
     
+    // Overridden by tests.
     private _clearAnimation(): void {
         var paneWrapperStyle = this._dom.paneWrapper.style;
         paneWrapperStyle.position = "";
@@ -828,6 +830,7 @@ export class SplitView {
     }
     
     // Should be called while SplitView is rendered in its shown mode
+    // Overridden by tests.
     _playShowAnimation(hiddenPaneThickness: IThickness): Promise<any> {
         var dim = this._horizontal ? Dimension.width : Dimension.height;
         var shownPaneRect = this._measureElement(this._dom.pane);
@@ -873,6 +876,7 @@ export class SplitView {
     }
     
     // Should be called while SplitView is rendered in its shown mode
+    // Overridden by tests.
     _playHideAnimation(hiddenPaneThickness: IThickness): Promise<any> {
         var dim = this._horizontal ? Dimension.width : Dimension.height;
         var shownPaneRect = this._measureElement(this._dom.pane);
