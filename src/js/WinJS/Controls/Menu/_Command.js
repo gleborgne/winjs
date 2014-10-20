@@ -491,7 +491,7 @@ define([
 
                         if (this.type === _Constants.typeFlyout && this.flyout.hidden) {
                             var delay = 400;
-                            this._hoverPromise = this._hoverPromise || Promise.timeout(400).then(
+                            this._hoverPromise = this._hoverPromise || Promise.timeout(delay).then(
                                 function () {
                                     that._handleMenuClick(event);
                                     that._hoverPromise = null;
