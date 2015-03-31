@@ -1531,7 +1531,11 @@ module CorsicaTests {
             LiveUnit.Assert.isTrue(toolBar.opened, "ToolBar should still be open");
         }
 
+<<<<<<< HEAD
         testCSSClasses() {
+=======
+        testToolBarAddsClassNamesToCommandingSurface() {
+>>>>>>> upstream/master
             // Make sure the appropriate ToolBar CSS classes are on _CommandingSurface subcomponents to allow for proper developer styling story.
 
             var toolBar = new ToolBar(this._element, { opened: true });
@@ -1545,6 +1549,23 @@ module CorsicaTests {
             LiveUnit.Assert.isTrue(WinJS.Utilities.hasClass(overflowButton, _Constants.ClassNames.overflowButtonCssClass), "ToolBar missing overflowbutton class");
             LiveUnit.Assert.isTrue(WinJS.Utilities.hasClass(overflowButtonEllipsis, _Constants.ClassNames.ellipsisCssClass), "ToolBar missing ellipsis class");
         }
+<<<<<<< HEAD
+=======
+
+        testBackgroundColorPercolatesToCommandingSurface() {
+            // Verifies that background color changes to the ToolBar are not impeded by the CommandingSurface element.
+            var toolBar = new ToolBar(this._element, { opened: true });
+            var commandingSurface = toolBar._commandingSurface;
+
+            toolBar.element.style.backgroundColor = "rgb(255, 100, 05)";
+            var toolBarStyle = getComputedStyle(toolBar.element),
+                commandingSurfaceStyle = getComputedStyle(commandingSurface.element);
+
+            var msg = "AppBar's commandingSurface element should match the background color of the AppBar element";
+            LiveUnit.LoggingCore.logComment("Test: " + msg);
+            LiveUnit.Assert.areEqual(toolBarStyle.backgroundColor, commandingSurfaceStyle.backgroundColor, msg);
+        }
+>>>>>>> upstream/master
     }
 }
 LiveUnit.registerTestClass("CorsicaTests.ToolBarTests");
