@@ -1937,11 +1937,7 @@ module CorsicaTests {
             LiveUnit.Assert.isTrue(toolBar.opened, "ToolBar should still be open");
         }
 
-<<<<<<< HEAD
-        testCSSClasses() {
-=======
         testToolBarAddsClassNamesToCommandingSurface() {
->>>>>>> upstream/master
             // Make sure the appropriate ToolBar CSS classes are on _CommandingSurface subcomponents to allow for proper developer styling story.
 
             var toolBar = new ToolBar(this._element, { opened: true });
@@ -1955,8 +1951,6 @@ module CorsicaTests {
             LiveUnit.Assert.isTrue(WinJS.Utilities.hasClass(overflowButton, _Constants.ClassNames.overflowButtonCssClass), "ToolBar missing overflowbutton class");
             LiveUnit.Assert.isTrue(WinJS.Utilities.hasClass(overflowButtonEllipsis, _Constants.ClassNames.ellipsisCssClass), "ToolBar missing ellipsis class");
         }
-<<<<<<< HEAD
-=======
 
         testShowingIHMClosesToolBar() {
             var toolBar = new ToolBar(this._element, { opened: true });
@@ -2074,7 +2068,6 @@ module CorsicaTests {
         testLightDismissWithTap(complete) {
             this._testLightDismissWithTrigger((toolBar) => { _LightDismissService._clickEaterTapped(); }).then(complete);
         }
->>>>>>> upstream/master
     }
 }
 LiveUnit.registerTestClass("CorsicaTests.ToolBarTests");

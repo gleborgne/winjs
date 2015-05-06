@@ -305,19 +305,11 @@ export class _CommandingSurface {
         });
 
     }
-<<<<<<< HEAD
-    /// Occurs immediately before the control is opened.
-    onbeforeopen: (ev: CustomEvent) => void;
-    /// Occurs immediately after the control is opened.
-    onafteropen: (ev: CustomEvent) => void;
-    /// Occurs immediately before the control is closed.
-=======
     /// Occurs immediately before the control is opened. Is cancelable.
     onbeforeopen: (ev: CustomEvent) => void;
     /// Occurs immediately after the control is opened.
     onafteropen: (ev: CustomEvent) => void;
     /// Occurs immediately before the control is closed. Is cancelable.
->>>>>>> upstream/master
     onbeforeclose: (ev: CustomEvent) => void;
     /// Occurs immediately after the control is closed.
     onafterclose: (ev: CustomEvent) => void;

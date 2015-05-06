@@ -1738,11 +1738,7 @@ module CorsicaTests {
             LiveUnit.Assert.isTrue(appBar.opened, "AppBar should still be open");
         }
 
-<<<<<<< HEAD
-        testCSSClasses() {
-=======
         testAppBarAddsClassNamesToCommandingSurface() {
->>>>>>> upstream/master
             // Make sure the appropriate AppBar CSS classes are on _CommandingSurface subcomponents to allow for proper developer styling story.
 
             var appBar = new AppBar(this._element, { opened: true });
@@ -1756,8 +1752,6 @@ module CorsicaTests {
             LiveUnit.Assert.isTrue(WinJS.Utilities.hasClass(overflowButton, _Constants.ClassNames.overflowButtonCssClass), "AppBar missing overflowbutton class");
             LiveUnit.Assert.isTrue(WinJS.Utilities.hasClass(overflowButtonEllipsis, _Constants.ClassNames.ellipsisCssClass), "AppBar missing ellipsis class");
         }
-<<<<<<< HEAD
-=======
 
         testPositionOffsetsAreCalculateAtConstructionTime() {
 
@@ -1924,7 +1918,6 @@ module CorsicaTests {
         testLightDismissWithTap(complete) {
             this._testLightDismissWithTrigger((appBar) => {  _LightDismissService._clickEaterTapped(); }).then(complete);
         }
->>>>>>> upstream/master
     }
 }
 LiveUnit.registerTestClass("CorsicaTests.AppBarTests");
