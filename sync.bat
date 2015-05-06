@@ -1,4 +1,4 @@
-git fetch upstream
+git fetch winjs
 git checkout master
-git merge upstream/master
+git merge winjs/master
 pause

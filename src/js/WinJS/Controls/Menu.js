@@ -19,7 +19,7 @@ define([
     './Menu/_Command'
 ], function menuInit(exports, _Global, _Base, _BaseUtils, _ErrorFromName, _Resources, _WriteProfilerMark, Promise, _ElementUtilities, _Hoverable, _KeyboardBehavior, _Constants, Flyout, _Overlay, _Command) {
     "use strict";
-
+    
     _Base.Namespace._moduleDefine(exports, "WinJS.UI", {
         /// <field>
         /// <summary locid="WinJS.UI.Menu">Represents a menu flyout for displaying commands.</summary>
@@ -248,6 +248,17 @@ define([
                 },
 
                 _show: function Menu_show(anchor, placement, alignment) {
+                    if (!_ElementUtilities.hasClass(this.element, _Constants.menuMouseSpacingClass) && !_ElementUtilities.hasClass(this.element, _Constants.menuTouchSpacingClass)) {
+                        // The Menu's spacing shouldn't change while it is already shown. Only
+                        // add a spacing class if it doesn't already have one. It will get
+                        // removed after the Menu hides.
+                        _ElementUtilities.addClass(
+                            this.element,
+                            Flyout.Flyout._cascadeManager.inputType === _KeyboardBehavior._InputTypes.mouse || Flyout.Flyout._cascadeManager.inputType === _KeyboardBehavior._InputTypes.keyboard ?
+                                _Constants.menuMouseSpacingClass :
+                                _Constants.menuTouchSpacingClass
+                        );
+                    }
                     // Call flyout show
                     this._baseFlyoutShow(anchor, placement, alignment);
 
@@ -262,6 +273,12 @@ define([
                         this._hoverPromise.cancel();
                     }
                     Flyout.Flyout.prototype._hide.call(this);
+                },
+                
+                _beforeEndHide: function Menu_beforeEndHide() {
+                    _ElementUtilities.removeClass(this.element, _Constants.menuMouseSpacingClass);
+                    _ElementUtilities.removeClass(this.element, _Constants.menuTouchSpacingClass);
+                    Flyout.Flyout.prototype._beforeEndHide.call(this);
                 },
 
                 _addCommand: function Menu_addCommand(command) {
@@ -320,11 +337,7 @@ define([
                 },
 
                 _handleKeyDown: function Menu_handleKeyDown(event) {
-                    if (event.keyCode === Key.escape) {
-                        // Show a focus rect on what we move focus to
-                        this._keyboardInvoked = true;
-                        this._hide();
-                    } else if (event.keyCode === Key.upArrow) {
+                    if (event.keyCode === Key.upArrow) {
                         Menu._focusOnPreviousElement(this.element);
 
                         // Prevent the page from scrolling

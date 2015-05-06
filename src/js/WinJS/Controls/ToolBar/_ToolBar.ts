@@ -18,6 +18,7 @@ import _Flyout = require("../../Controls/Flyout");
 import _Global = require("../../Core/_Global");
 import _Hoverable = require("../../Utilities/_Hoverable");
 import _KeyboardBehavior = require("../../Utilities/_KeyboardBehavior");
+import _LightDismissService = require('../../_LightDismissService');
 import Menu = require("../../Controls/Menu");
 import _MenuCommand = require("../Menu/_Command");
 import Promise = require('../../Promise');
@@ -25,10 +26,10 @@ import _Resources = require("../../Core/_Resources");
 import Scheduler = require("../../Scheduler");
 import _OpenCloseMachine = require('../../Utilities/_OpenCloseMachine');
 import _Signal = require('../../_Signal');
+import _WinRT = require('../../Core/_WinRT');
 import _WriteProfilerMark = require("../../Core/_WriteProfilerMark");
 
 require(["require-style!less/styles-toolbar"]);
-require(["require-style!less/colors-toolbar"]);
 
 "use strict";
 
@@ -82,6 +83,9 @@ export class ToolBar {
     private _disposed: boolean;
     private _commandingSurface: _ICommandingSurface._CommandingSurface;
     private _isOpenedMode: boolean;
+    private _handleShowingKeyboardBound: (ev: any) => void
+    private _dismissable: _LightDismissService.ILightDismissable;
+    private _cachedClosedHeight: number;
 
     private _dom: {
         root: HTMLElement;
@@ -122,6 +126,7 @@ export class ToolBar {
     set closedDisplayMode(value: string) {
         if (ClosedDisplayMode[value]) {
             this._commandingSurface.closedDisplayMode = value;
+            this._cachedClosedHeight = null;
         }
     }
 
@@ -162,17 +167,15 @@ export class ToolBar {
         var stateMachine = new _OpenCloseMachine.OpenCloseMachine({
             eventElement: this.element,
             onOpen: () => {
+                var openAnimation = this._commandingSurface.createOpenAnimation(this._getClosedHeight());
                 this._synchronousOpen();
-
-                // Animate
-                return Promise.wrap();
+                return openAnimation.execute();
             },
-
             onClose: () => {
-                this._synchronousClose()
-
-                // Animate
-                return Promise.wrap();
+                var closeAnimation = this._commandingSurface.createCloseAnimation(this._getClosedHeight());
+                return closeAnimation.execute().then(() => {
+                    this._synchronousClose();
+                });
             },
             onUpdateDom: () => {
                 this._updateDomImpl();
@@ -182,14 +185,27 @@ export class ToolBar {
                 this._updateDomImpl();
             }
         });
+
+        // Events
+        this._handleShowingKeyboardBound = this._handleShowingKeyboard.bind(this);
+        _ElementUtilities._inputPaneListener.addEventListener(this._dom.root, "showing", this._handleShowingKeyboardBound);
+
         // Initialize private state.
         this._disposed = false;
+        this._cachedClosedHeight = null;
         this._commandingSurface = new _CommandingSurface._CommandingSurface(this._dom.commandingSurfaceEl, { openCloseMachine: stateMachine });
         addClass(<HTMLElement>this._dom.commandingSurfaceEl.querySelector(".win-commandingsurface-actionarea"), _Constants.ClassNames.actionAreaCssClass);
         addClass(<HTMLElement>this._dom.commandingSurfaceEl.querySelector(".win-commandingsurface-overflowarea"), _Constants.ClassNames.overflowAreaCssClass);
         addClass(<HTMLElement>this._dom.commandingSurfaceEl.querySelector(".win-commandingsurface-overflowbutton"), _Constants.ClassNames.overflowButtonCssClass);
         addClass(<HTMLElement>this._dom.commandingSurfaceEl.querySelector(".win-commandingsurface-ellipsis"), _Constants.ClassNames.ellipsisCssClass);
         this._isOpenedMode = _Constants.defaultOpened;
+        this._dismissable = new _LightDismissService.LightDismissableElement({
+            element: this._dom.root,
+            tabIndex: this._dom.root.hasAttribute("tabIndex") ? this._dom.root.tabIndex : -1,
+            onLightDismiss: () => {
+                this.close();
+            }
+        });
 
         // Initialize public properties.
         this.closedDisplayMode = _Constants.defaultClosedDisplayMode;
@@ -200,9 +216,9 @@ export class ToolBar {
         _ElementUtilities._inDom(this.element).then(() => {
             return this._commandingSurface.initialized;
         }).then(() => {
-            stateMachine.exitInit();
-            this._writeProfilerMark("constructor,StopTM");
-        });
+                stateMachine.exitInit();
+                this._writeProfilerMark("constructor,StopTM");
+            });
     }
 
     /// <field type="Function" locid="WinJS.UI.ToolBar.onbeforeopen" helpKeyword="WinJS.UI.ToolBar.onbeforeopen">
@@ -251,16 +267,16 @@ export class ToolBar {
         }
 
         this._disposed = true;
+        _LightDismissService.hidden(this._dismissable);
         // Disposing the _commandingSurface will trigger dispose on its OpenCloseMachine and synchronously complete any animations that might have been running.
         this._commandingSurface.dispose();
-        // If page navigation is happening, we don't want to ToolBar left behind in the body.
+        // If page navigation is happening, we don't want the ToolBar left behind in the body.
         // Synchronoulsy close the ToolBar to force it out of the body and back into its parent element.
         this._synchronousClose();
 
+        _ElementUtilities._inputPaneListener.removeEventListener(this._dom.root, "showing", this._handleShowingKeyboardBound);
+
         _Dispose.disposeSubTree(this.element);
-        //TODO: Does the placeHolder element need a dispose method on it as well, so that will be called if its parent subtree is disposed?
-        // If the placeholder is in the DOM at all, it means the toolbar is temporarily open and absolutely positioned in the docuent.body.
-        // Also, can we accomplish this just by hanging this._winControl off of the placeHolder element as well?
     }
 
     forceLayout() {
@@ -270,6 +286,32 @@ export class ToolBar {
         /// </summary>
         /// </signature>
         this._commandingSurface.forceLayout();
+    }
+
+    getCommandById(id: string): _Command.ICommand {
+        /// <signature helpKeyword="WinJS.UI.ToolBar.getCommandById">
+        /// <summary locid="WinJS.UI.ToolBar.getCommandById">
+        /// Retrieves the command with the specified ID from this ToolBar.
+        /// If more than one command is found, this method returns the first command found.
+        /// </summary>
+        /// <param name="id" type="String" locid="WinJS.UI.ToolBar.getCommandById_p:id">Id of the command to return.</param>
+        /// <returns type="object" locid="WinJS.UI.ToolBar.getCommandById_returnValue">
+        /// The command found, or null if no command is found.
+        /// </returns>
+        /// </signature>
+        return this._commandingSurface.getCommandById(id);
+    }
+
+    showOnlyCommands(commands: Array<string|_Command.ICommand>): void {
+        /// <signature helpKeyword="WinJS.UI.ToolBar.showOnlyCommands">
+        /// <summary locid="WinJS.UI.ToolBar.showOnlyCommands">
+        /// Show the specified commands, hiding all of the others in the ToolBar.
+        /// </summary>
+        /// <param name="commands" type="Array" locid="WinJS.UI.ToolBar.showOnlyCommands_p:commands">
+        /// An array of the commands to show. The array elements may be Command objects, or the string identifiers (IDs) of commands.
+        /// </param>
+        /// </signature>
+        return this._commandingSurface.showOnlyCommands(commands);
     }
 
     private _writeProfilerMark(text: string) {
@@ -284,10 +326,6 @@ export class ToolBar {
         root["winControl"] = this;
 
         this._id = root.id || _ElementUtilities._uniqueID(root);
-
-        if (!root.hasAttribute("tabIndex")) {
-            root.tabIndex = -1;
-        }
 
         _ElementUtilities.addClass(root, _Constants.ClassNames.controlCssClass);
         _ElementUtilities.addClass(root, _Constants.ClassNames.disposableCssClass);
@@ -304,19 +342,43 @@ export class ToolBar {
         }
 
         // Create element for commandingSurface and reparent any declarative Commands.
-        // commandingSurface will parse child elements as AppBarCommands.
+        // The CommandingSurface constructor will parse child elements as AppBarCommands.
         var commandingSurfaceEl = document.createElement("DIV");
         _ElementUtilities._reparentChildren(root, commandingSurfaceEl);
         root.appendChild(commandingSurfaceEl);
 
+        // While the ToolBar is open, it will place itself in the <body> so it can become a light dismissible
+        // overlay. It leaves the placeHolder element behind as stand in at the ToolBar's original DOM location
+        // to avoid reflowing surrounding app content and create the illusion that the ToolBar hasn't moved along
+        // the x or y planes.
         var placeHolder = _Global.document.createElement("DIV");
         _ElementUtilities.addClass(placeHolder, _Constants.ClassNames.placeHolderCssClass);
+        // If the ToolBar's original HTML parent node is disposed while the ToolBar is open and repositioned as 
+        // a temporary child of the <body>, make sure that calling dispose on the placeHolder element will trigger 
+        // dispose on the ToolBar as well.
+        _Dispose.markDisposable(placeHolder, this.dispose.bind(this));
 
         this._dom = {
             root: root,
             commandingSurfaceEl: commandingSurfaceEl,
             placeHolder: placeHolder,
         };
+    }
+
+    private _handleShowingKeyboard(event: { detail: { originalEvent: _WinRT.Windows.UI.ViewManagement.InputPaneVisibilityEventArgs } }) {
+        // Because the ToolBar takes up layout space and is not an overlay, it doesn't have the same expectation 
+        // to move itself to get out of the way of a showing IHM. Instsead we just close the ToolBar to avoid 
+        // scenarios where the ToolBar is occluded, but the click-eating-div is still present since it may seem 
+        // strange to end users that an occluded ToolBar (out of sight, out of mind) is still eating their first 
+        // click.
+
+        // Mitigation:
+        // Because (1) custom content in a ToolBar can only be included as a 'content' type command, because (2)
+        // the ToolBar only supports closedDisplayModes 'compact' and 'full', and because (3) 'content' type
+        // commands in the overflowarea use a separate contentflyout to display their contents:
+        // Interactable custom content contained within the ToolBar actionarea or overflowarea, will remain
+        // visible and interactable even when showing the IHM closes the ToolBar.
+        this.close();
     }
 
     private _synchronousOpen(): void {
@@ -360,82 +422,93 @@ export class ToolBar {
         this._commandingSurface.updateDomImpl();
     }
 
+    private _getClosedHeight(): number {
+        if (this._cachedClosedHeight === null) {
+            var wasOpen = this._isOpenedMode;
+            if (this._isOpenedMode) {
+                this._synchronousClose();
+            }
+            this._cachedClosedHeight = this._commandingSurface.getBoundingRects().commandingSurface.height;
+            if (wasOpen) {
+                this._synchronousOpen();
+            }
+        }
+
+        return this._cachedClosedHeight;
+    }
+
     private _updateDomImpl_renderOpened(): void {
 
         // Measure closed state.
-        var closedCommandingSurfaceRect = this._commandingSurface.getBoundingRects().commandingSurface;
         this._updateDomImpl_renderedState.prevInlineWidth = this._dom.root.style.width;
+        var closedBorderBox = this._dom.root.getBoundingClientRect();
+        var closedContentWidth = _ElementUtilities._getPreciseContentWidth(this._dom.root);
+        var closedContentHeight = _ElementUtilities._getPreciseContentHeight(this._dom.root);
+        var closedStyle = getComputedStyle(this._dom.root);
+        var closedPaddingTop = _ElementUtilities._convertToPrecisePixels(closedStyle.paddingTop);
+        var closedBorderTop = _ElementUtilities._convertToPrecisePixels(closedStyle.borderTopWidth);
+        var closedMargins = _ElementUtilities._getPreciseMargins(this._dom.root);
+        var closedContentBoxTop = closedBorderBox.top + closedBorderTop + closedPaddingTop;
+        var closedContentBoxBottom = closedContentBoxTop + closedContentHeight;
 
-        // Get replacement element
+        // Size our placeHolder. Set height and width to match borderbox of the closed ToolBar.
+        // Copy ToolBar margins to the placeholder.
         var placeHolder = this._dom.placeHolder;
-        placeHolder.style.width = closedCommandingSurfaceRect.width + "px";
-        placeHolder.style.height = closedCommandingSurfaceRect.height + "px";
+        var placeHolderStyle = placeHolder.style;
+        placeHolderStyle.width = closedBorderBox.width + "px";
+        placeHolderStyle.height = closedBorderBox.height + "px";
+        placeHolderStyle.marginTop = closedMargins.top + "px";
+        placeHolderStyle.marginRight = closedMargins.right + "px";
+        placeHolderStyle.marginBottom = closedMargins.bottom + "px";
+        placeHolderStyle.marginLeft = closedMargins.left + "px";
 
-        // Move ToolBar element to the body and leave placeHolder element in our place to avoid reflowing surrounding app content.
-        this._dom.root.parentElement.insertBefore(placeHolder, this._dom.root);
-        _Global.document.body.appendChild(this._dom.root);
+        // Move ToolBar element to the body in preparation of becoming a light dismissible. Leave an equal sized placeHolder element 
+        // at our original DOM location to avoid reflowing surrounding app content.
+        _ElementUtilities._maintainFocus(() => {
+            this._dom.root.parentElement.insertBefore(placeHolder, this._dom.root);
+            _Global.document.body.appendChild(this._dom.root);
+        });
+
+        // Position the ToolBar to completely cover the same region as the placeholder element.
+        this._dom.root.style.width = closedContentWidth + "px";
+        this._dom.root.style.left = closedBorderBox.left - closedMargins.left + "px";
+
+        // Determine which direction to expand the CommandingSurface elements when opened. The overflow area will be rendered at the corresponding edge of 
+        // the ToolBar's content box, so we choose the direction that offers the most space between that edge and the corresponding edge of the viewport. 
+        // This is to reduce the chance that the overflow area might clip through the edge of the viewport.
+        var topOfViewport = 0;
+        var bottomOfViewport = _Global.innerHeight;
+        var distanceFromTop = closedContentBoxTop - topOfViewport;
+        var distanceFromBottom = bottomOfViewport - closedContentBoxBottom;
+
+        if (distanceFromTop > distanceFromBottom) {
+            // CommandingSurface is going to expand updwards.
+            this._commandingSurface.overflowDirection = _Constants.OverflowDirection.top;
+            // Position the bottom edge of the ToolBar marginbox over the bottom edge of the placeholder marginbox.
+            this._dom.root.style.bottom = (bottomOfViewport - closedBorderBox.bottom) - closedMargins.bottom + "px";
+        } else {
+            // CommandingSurface is going to expand downwards.
+            this._commandingSurface.overflowDirection = _Constants.OverflowDirection.bottom;
+            // Position the top edge of the ToolBar marginbox over the top edge of the placeholder marginbox.
+            this._dom.root.style.top = (topOfViewport + closedBorderBox.top) - closedMargins.top + "px";
+        }
 
         // Render opened state
         _ElementUtilities.addClass(this._dom.root, _Constants.ClassNames.openedClass);
         _ElementUtilities.removeClass(this._dom.root, _Constants.ClassNames.closedClass);
-        this._dom.root.style.width = closedCommandingSurfaceRect.width + "px";
-        this._dom.root.style.left = closedCommandingSurfaceRect.left + "px";
-
         this._commandingSurface.synchronousOpen();
-
-        // Measure opened state
-        var openedRects = this._commandingSurface.getBoundingRects();
-
-        //
-        // Determine _commandingSurface overflowDirection
-        //
-        var topOfViewport = 0,
-            bottomOfViewport = topOfViewport + _Global.innerHeight,
-            tolerance = 1;
-
-        var alignTop = () => {
-            this._commandingSurface.overflowDirection = "bottom"; // TODO: Is it safe to use the static commandingSurface "OverflowDirection" enum for this value? (lazy loading... et al)
-<<<<<<< HEAD
-            this._dom.root.style.top = closedActionAreaRect.top + "px";
-        }
-        var alignBottom = () => {
-            this._commandingSurface.overflowDirection = "top"; // TODO: Is it safe to use the static commandingSurface "OverflowDirection" enum for this value? (lazy loading... et al)
-            this._dom.root.style.bottom = (bottomOfViewport - closedActionAreaRect.bottom) + "px";
-=======
-            this._dom.root.style.top = closedCommandingSurfaceRect.top + "px";
-        }
-        var alignBottom = () => {
-            this._commandingSurface.overflowDirection = "top"; // TODO: Is it safe to use the static commandingSurface "OverflowDirection" enum for this value? (lazy loading... et al)
-            this._dom.root.style.bottom = (bottomOfViewport - closedCommandingSurfaceRect.bottom) + "px";
->>>>>>> upstream/master
-        }
-        function fitsBelow(): boolean {
-            // If we orient the commandingSurface from top to bottom, would the bottom of the overflow area fit above the bottom edge of the window?
-            var bottomOfOverFlowArea = closedCommandingSurfaceRect.top + openedRects.commandingSurface.height + openedRects.overflowArea.height;
-            return bottomOfOverFlowArea < bottomOfViewport + tolerance;
-        }
-        function fitsAbove(): boolean {
-            // If we orient the commandingSurface from bottom to top, would the top of the overflow area fit below the top edge of the window?
-            var topOfOverFlowArea = closedCommandingSurfaceRect.bottom - openedRects.commandingSurface.height - openedRects.overflowArea.height;
-            return topOfOverFlowArea > topOfViewport - tolerance;
-        }
-
-        if (fitsBelow()) {
-            alignTop();
-        } else if (fitsAbove()) {
-            alignBottom();
-        } else {
-            // TODO, orient ourselves top to bottom and shrink the height of the overflowarea to make us fit within the available space.
-            alignTop();
-        }
+        _LightDismissService.shown(this._dismissable); // Call at the start of the open animation
     }
+
     private _updateDomImpl_renderClosed(): void {
 
         // Restore our placement in the DOM
         if (this._dom.placeHolder.parentElement) {
-            var placeHolder = this._dom.placeHolder;
-            placeHolder.parentElement.insertBefore(this._dom.root, placeHolder);
-            placeHolder.parentElement.removeChild(placeHolder);
+            _ElementUtilities._maintainFocus(() => {
+                var placeHolder = this._dom.placeHolder;
+                placeHolder.parentElement.insertBefore(this._dom.root, placeHolder);
+                placeHolder.parentElement.removeChild(placeHolder);
+            });
         }
 
         // Render Closed
@@ -447,6 +520,7 @@ export class ToolBar {
         _ElementUtilities.addClass(this._dom.root, _Constants.ClassNames.closedClass);
         _ElementUtilities.removeClass(this._dom.root, _Constants.ClassNames.openedClass);
         this._commandingSurface.synchronousClose();
+        _LightDismissService.hidden(this._dismissable); // Call after the close animation
     }
 }
 

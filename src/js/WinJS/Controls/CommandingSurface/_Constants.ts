@@ -5,15 +5,16 @@ export var ClassNames = {
     controlCssClass: "win-commandingsurface",
     disposableCssClass: "win-disposable",
     actionAreaCssClass: "win-commandingsurface-actionarea",
+    actionAreaContainerCssClass: "win-commandingsurface-actionareacontainer",
     overflowButtonCssClass: "win-commandingsurface-overflowbutton",
     spacerCssClass: "win-commandingsurface-spacer",
     ellipsisCssClass: "win-commandingsurface-ellipsis",
     overflowAreaCssClass: "win-commandingsurface-overflowarea",
+    overflowAreaContainerCssClass: "win-commandingsurface-overflowareacontainer",
     contentFlyoutCssClass: "win-commandingsurface-contentflyout",
     emptyCommandingSurfaceCssClass: "win-commandingsurface-empty",
     menuCssClass: "win-menu",
     menuContainsToggleCommandClass: "win-menu-containstogglecommand",
-    openingClass: "win-commandingsurface-opening",
     openedClass: "win-commandingsurface-opened",
     closingClass: "win-commandingsurface-closing",
     closedClass: "win-commandingsurface-closed",
@@ -29,7 +30,9 @@ export var EventNames = {
     beforeOpen: "beforeopen",
     afterOpen: "afteropen",
     beforeClose: "beforeclose",
-    afterClose: "afterclose"
+    afterClose: "afterclose",
+
+    commandPropertyMutated: "_commandpropertymutated",
 };
 
 export var actionAreaCommandWidth = 68;
@@ -39,6 +42,8 @@ export var overflowCommandHeight = 44;
 export var overflowSeparatorHeight = 12;
 
 export var controlMinWidth = actionAreaOverflowButtonWidth;
+export var overflowAreaMaxWidth = 480;
+
 export var heightOfMinimal = 24;
 export var heightOfCompact = 48;
 

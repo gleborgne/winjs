@@ -14,9 +14,7 @@ export var ClassNames = {
     emptytoolbarCssClass: "win-toolbar-empty",
     menuCssClass: "win-menu",
     menuContainsToggleCommandClass: "win-menu-containstogglecommand",
-    openingClass: "win-toolbar-opening",
     openedClass: "win-toolbar-opened",
-    closingClass: "win-toolbar-closing",
     closedClass: "win-toolbar-closed",
     compactClass: "win-toolbar-closeddisplaycompact",
     fullClass: "win-toolbar-closeddisplayfull",
@@ -32,6 +30,12 @@ export var EventNames = {
     afterClose: "afterclose"
 };
 
+export var OverflowDirection = {
+    top: "top",
+    bottom: "bottom",
+};
+
+export var overflowAreaMaxWidth: number = _CommandingSurfaceConstants.overflowAreaMaxWidth;
 export var controlMinWidth: number = _CommandingSurfaceConstants.controlMinWidth;
 
 export var defaultClosedDisplayMode = "compact";

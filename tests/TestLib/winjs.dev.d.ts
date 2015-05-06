@@ -107,6 +107,14 @@ declare module WinJS {
         var _getLowestTabIndexInList;
         var _MSPointerEvent;
         var _supportsSnapPoints: boolean;
+
+        function _convertToPrecisePixels(value: string): number;
+        function _getPreciseTotalHeight(element: HTMLElement): number;
+        function _getPreciseTotalWidth(element: HTMLElement): number;
+        function _getPreciseContentHeight(element: HTMLElement): number;
+        function _getPreciseContentWidth(element: HTMLElement): number;
+        function _getPreciseMargins(element: HTMLElement): { top: number; right: number; bottom: number; left: number; };
+
     }
 
     module Resources {
@@ -127,6 +135,32 @@ declare module WinJS {
         var _CallExpression;
         var _IdentifierExpression;
         var _GroupFocusCache;
+
+        module _LightDismissService {
+            interface ILightDismissInfo {
+                reason: string;
+                active: boolean;
+                stopPropagation(): void;
+                preventDefault(): void;
+            }
+
+            interface ILightDismissable {
+                setZIndex(zIndex: string): void;
+                getZIndexCount(): number;
+                containsElement(element: HTMLElement): boolean;
+                onActivate(): void;
+                onFocus(element: HTMLElement): void;
+                onHide(): void;
+                onShouldLightDismiss(info: ILightDismissInfo): boolean;
+                onLightDismiss(info: ILightDismissInfo): void;
+            }
+
+            function shown(client: ILightDismissable): void;
+            function hidden(client: ILightDismissable): void;
+            function isShown(client: ILightDismissable): boolean;
+            function isTopmost(client: ILightDismissable): boolean;
+            function _clickEaterTapped(): void;
+        }
 
         class _ParallelWorkQueue {
             constructor(maxRunning: number);
@@ -390,21 +424,23 @@ declare module WinJS {
 
         class PrivateCommandingSurface extends WinJS.UI._CommandingSurface {
             _disposed: boolean;
-            _primaryCommands: ICommand[];
-            _secondaryCommands: ICommand[];
+            _primaryCommands: PrivateCommand[];
+            _secondaryCommands: PrivateCommand[];
             _getCommandWidth(command: ICommand): number;
             _contentFlyout: WinJS.UI.Flyout;
             _contentFlyoutInterior: HTMLElement;
-            _playShowAnimation(): Promise<any>;
-            _playHideAnimation(): Promise<any>;
             _dom: {
                 root: HTMLElement;
                 actionArea: HTMLElement;
+                actionAreaContainer: HTMLElement;
                 spacer: HTMLDivElement;
                 overflowButton: HTMLButtonElement;
                 overflowArea: HTMLElement;
+                overflowAreaContainer: HTMLElement;
             };
             _machine: IOpenCloseMachine;
+            _layoutCompleteCallback(): any;
+            _menuCommandProjections: PrivateMenuCommand[];
         }
 
         class PrivateAppBar extends WinJS.UI.AppBar {
@@ -414,6 +450,13 @@ declare module WinJS {
                 commandingSurfaceEl: HTMLElement;
             };
             _commandingSurface: WinJS.UI.PrivateCommandingSurface;
+            _shouldAdjustForShowingKeyboard: () => boolean;
+            _handleShowingKeyboard: () => Promise<any>;
+            _handleHidingKeyboard: () => void;
+            _updateDomImpl_renderedState: {
+                adjustedOffsets: { top: string; bottom: string; };
+            }
+            _dismissable: _LightDismissService.ILightDismissable;
         }
 
         class PrivateToolBar extends WinJS.UI.ToolBar {
@@ -424,6 +467,17 @@ declare module WinJS {
                 placeHolder: HTMLElement;
             };
             _commandingSurface: WinJS.UI.PrivateCommandingSurface;
+            _dismissable: _LightDismissService.ILightDismissable;
+            _handleShowingKeyboard: () => void;
+        }
+
+        export interface AppBarCommandPropertyMutatedEventObj {
+            detail: {
+                command: ICommand;
+                oldValue: any;
+                newValue: any;
+                propertyName: string;
+            };
         }
 
         class PrivateCommand extends WinJS.UI.AppBarCommand {
@@ -432,6 +486,11 @@ declare module WinJS {
             _disposed;
             _tooltipControl;
             _lastElementFocus;
+            _propertyMutations: {
+                bind(callback:any): void;
+                unbind(callback:any): void;
+                dispatchEvent(type: string, eventProperties: any): boolean;
+            }
         }
 
         /**
@@ -567,6 +626,7 @@ declare module WinJS {
             _navMode;
             _currentScrollTargetLocation;
             _viewportWidth;
+            _headerItemsWidth: number;
 
             static _ClassName;
             static _EventName;
@@ -594,9 +654,13 @@ declare module WinJS {
             public dispose(): void;
             public forceLayout(): void;
             public closedDisplayMode: string;
+            public createOpenAnimation(): { execute(): Promise<any> };
+            public createCloseAnimation(): { execute(): Promise<any> };
             public open(): void;
             public close(): void;
             public opened: boolean;
+            public getCommandById(id: string): ICommand;
+            public showOnlyCommands(commands: Array<string|ICommand>): void;
             public onbeforeopen: (ev: CustomEvent) => void;
             public onafteropen: (ev: CustomEvent) => void;
             public onbeforeclose: (ev: CustomEvent) => void;
@@ -623,6 +687,13 @@ declare module WinJS {
         var _RIGHT_MSPOINTER_BUTTON;
         var _selectedClass;
         var _keyboardSeenLast;
+        var _lastInputType;
+        var _InputTypes: {
+            mouse: string;
+            keyboard: string;
+            touch: string;
+            pen: string;
+        };
         var _itemFocusOutlineClass;
         var _itemBoxClass;
         var _itemClass;

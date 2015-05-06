@@ -8,6 +8,7 @@ module CorsicaTests {
     "use strict";
 
     var _Constants = Helper.require("WinJS/Controls/_LegacyAppBar/_Constants"),
+        _LightDismissService = Helper.require("WinJS/_LightDismissService"),
         Key = WinJS.Utilities.Key,
         MenuCommand = <typeof WinJS.UI.PrivateMenuCommand> WinJS.UI.MenuCommand,
         Menu = <typeof WinJS.UI.PrivateMenu> WinJS.UI.Menu,
@@ -23,11 +24,6 @@ module CorsicaTests {
 
         tearDown() {
             LiveUnit.LoggingCore.logComment("In tearDown");
-
-            OverlayHelpers.disposeAndRemove(document.querySelector("." + WinJS.UI._Overlay._clickEatingAppBarClass));
-            OverlayHelpers.disposeAndRemove(document.querySelector("." + WinJS.UI._Overlay._clickEatingFlyoutClass));
-            WinJS.UI._Overlay._clickEatingAppBarDiv = false;
-            WinJS.UI._Overlay._clickEatingFlyoutDiv = false;
         }
 
         // Test Menu Instantiation
@@ -227,41 +223,23 @@ module CorsicaTests {
         }
 
         testBackClickEventTriggersLightDismiss = function (complete) {
-            // Verifies that a shown Menu will handle the WinJS.Application.backclick event and light dismiss itself.
+            // Verifies that a shown Menu will light dismiss due to backclick.
 
             // Simulate
             function simulateBackClick() {
-                backClickEvent = OverlayHelpers.createBackClickEvent();
-                LiveUnit.Assert.isFalse(backClickEvent._winRTBackPressedEvent.handled);
-                WinJS.Application.queueEvent(backClickEvent); // Fire the "backclick" event from WinJS.Application
-
-                WinJS.Application.addEventListener("verification", verify, true);
-                WinJS.Application.queueEvent({ type: 'verification' });
-            };
-
-            // Verify
-            function verify() {
-                LiveUnit.Assert.isTrue(backClickEvent._winRTBackPressedEvent.handled, "Menu should have handled the 'backclick' event");
+                var handled = _LightDismissService._onBackClick();
+                LiveUnit.Assert.isTrue(handled, "Menu should have handled the 'backclick' event");
                 LiveUnit.Assert.isTrue(menu.hidden, "Menu should be hidden after light dismiss");
                 cleanup();
             };
 
             // Cleanup
             function cleanup() {
-                WinJS.Application.removeEventListener("verification", verify, true);
-                WinJS.Application.stop();
-                // Application.stop() kills all listeners on the Application object.
-                // Reset all global _Overlay eventhandlers to reattach our listener to the Application "backclick" event.
-                WinJS.UI._Overlay._globalEventListeners.reset();
-
                 OverlayHelpers.disposeAndRemove(menuElement);
                 complete();
             }
 
             // Setup
-            WinJS.Application.start();
-            var backClickEvent;
-
             var menuElement = document.createElement("div");
             document.body.appendChild(menuElement);
             var menu = new Menu(menuElement);
@@ -292,8 +270,9 @@ module CorsicaTests {
             });
         };
 
-        testShowAndHideMovesFocusWithoutWaitingForAnimationToComplete = function (complete) {
-            // Verifies Menu.show and Menu.hide moves focus synchronously after beginning the animation.
+        testShowMovesFocusSyncAndHideMovesFocusAsync = function (complete) {
+            // Verifies Menu.show moves focus at the beginning of the animation
+            // and Menu.hide moves focus at the end of the animation.
             var button = document.createElement("button");
             document.body.appendChild(button);
 
@@ -302,9 +281,7 @@ module CorsicaTests {
             var menu = new Menu(menuElement, { anchor: document.body });
 
             var msg = "",
-                test1Ran = false,
-                test2Ran = false;
-
+                test1Ran = false;
 
             button.focus();
             LiveUnit.Assert.areEqual(document.activeElement, button, "TEST ERROR: button should have focus");
@@ -318,29 +295,22 @@ module CorsicaTests {
             };
             menu.addEventListener("beforeshow", beforeShow, false);
 
-            function beforeHide() {
-                menu.removeEventListener("beforehide", beforeHide, false);
-                WinJS.Promise.timeout(0).then(() => {
-                    LiveUnit.Assert.areEqual(document.activeElement, button, msg);
-                    test2Ran = true;
-                });
+            function afterHide() {
+                menu.removeEventListener("afterhide", afterHide, false);
+                LiveUnit.Assert.areEqual(document.activeElement, button, msg);
+                complete();
             }
-            menu.addEventListener("beforehide", beforeHide, false);
+            menu.addEventListener("afterhide", afterHide, false);
 
             msg = "Menu.show should take focus synchronously after the 'beforeshow' event";
             LiveUnit.LoggingCore.logComment("Test: " + msg);
             OverlayHelpers.show(menu).then(() => {
                 LiveUnit.Assert.isTrue(test1Ran, "TEST ERROR: Test 1 did not run.");
 
-                msg = "Menu.show should take focus synchronously after the 'beforeshow' event";
+                msg = "Menu.hide should move focus before the 'afterhide' event";
                 LiveUnit.LoggingCore.logComment("Test: " + msg);
                 return OverlayHelpers.hide(menu);
-            }).then(() => {
-                    LiveUnit.Assert.isTrue(test2Ran, "TEST ERROR: Test 2 did not run.");
-
-                    OverlayHelpers.disposeAndRemove(menuElement);
-                    complete();
-                });
+            });
         }
 
         testMenuLaysOutCommandsCorrectly = function (complete) {
@@ -670,6 +640,144 @@ module CorsicaTests {
                     c1.element.focus();
                 });
         };
+        
+        testAdaptiveSpacing = function (complete) {
+            var InputTypes = WinJS.UI._InputTypes;
+            
+            function test(inputType, expectedClass) {
+                var menuElement = document.createElement('div');
+                document.body.appendChild(menuElement);
+                var menu = new Menu(menuElement, {
+                    anchor: document.body,
+                    commands: [
+                        new MenuCommand(null, { id: 'c1', type: 'button' }),
+                        new MenuCommand(null, { id: 'c2', type: 'button' }),
+                        new MenuCommand(null, { id: 'c3', type: 'button' })
+                    ]
+                });                
+                
+                WinJS.UI._lastInputType = inputType;
+                return OverlayHelpers.show(menu).then(() => {
+                    LiveUnit.Assert.isTrue(WinJS.Utilities.hasClass(menuElement, expectedClass),
+                        "Menu should use class '" + expectedClass + "' when last input type was '" + inputType + "'");
+                    OverlayHelpers.disposeAndRemove(menuElement);
+                });
+            }
+            
+            WinJS.Promise.as().then(() => {
+                return test(InputTypes.mouse, _Constants.menuMouseSpacingClass);
+            }).then(() => {
+                return test(InputTypes.keyboard, _Constants.menuMouseSpacingClass);
+            }).then(() => {
+                return test(InputTypes.touch, _Constants.menuTouchSpacingClass);
+            }).then(() => {
+                return test(InputTypes.pen, _Constants.menuTouchSpacingClass);
+            }).then(complete);
+        }
+        
+        testAdaptiveSpacingDoesntChangeWhileShown = function (complete) {
+            var InputTypes = WinJS.UI._InputTypes;
+            
+            var menuElement = document.createElement('div');
+            document.body.appendChild(menuElement);
+            var menu = new Menu(menuElement, {
+                anchor: document.body,
+                commands: [
+                    new MenuCommand(null, { id: 'c1', type: 'button' }),
+                    new MenuCommand(null, { id: 'c2', type: 'button' }),
+                    new MenuCommand(null, { id: 'c3', type: 'button' })
+                ]
+            });                
+            
+            WinJS.UI._lastInputType = InputTypes.mouse;
+            return OverlayHelpers.show(menu).then(() => {
+                LiveUnit.Assert.isTrue(WinJS.Utilities.hasClass(menuElement, _Constants.menuMouseSpacingClass),
+                    "Menu should use mouse spacing when last input type was mouse");
+                    
+                WinJS.UI._lastInputType = InputTypes.touch
+                menu.show(document.body);
+                LiveUnit.Assert.isTrue(WinJS.Utilities.hasClass(menuElement, _Constants.menuMouseSpacingClass),
+                    "Menu shouldn't have switched spacing while it was shown");
+                OverlayHelpers.disposeAndRemove(menuElement);
+                
+                complete();
+            });
+        }
+        
+        testAdaptiveSpacingRecomputedWhenShowing = function (complete) {
+            var InputTypes = WinJS.UI._InputTypes;
+            
+            var menuElement = document.createElement('div');
+            document.body.appendChild(menuElement);
+            var menu = new Menu(menuElement, {
+                anchor: document.body,
+                commands: [
+                    new MenuCommand(null, { id: 'c1', type: 'button' }),
+                    new MenuCommand(null, { id: 'c2', type: 'button' }),
+                    new MenuCommand(null, { id: 'c3', type: 'button' })
+                ]
+            });                
+            
+            WinJS.UI._lastInputType = InputTypes.mouse;
+            return OverlayHelpers.show(menu).then(() => {
+                LiveUnit.Assert.isTrue(WinJS.Utilities.hasClass(menuElement, _Constants.menuMouseSpacingClass),
+                    "Menu should use mouse spacing when last input type was mouse");
+                
+                return OverlayHelpers.hide(menu);
+            }).then(() => {
+                WinJS.UI._lastInputType = InputTypes.touch;
+                return OverlayHelpers.show(menu);
+            }).then(() => {
+                LiveUnit.Assert.isTrue(WinJS.Utilities.hasClass(menuElement, _Constants.menuTouchSpacingClass),
+                    "Menu should use touch spacing when reshowing and last input type was touch");
+                OverlayHelpers.disposeAndRemove(menuElement);
+                complete();
+            });
+        }
+        
+        testAdaptiveSpacingConsistentInCascade = function (complete) {
+            var InputTypes = WinJS.UI._InputTypes;
+            
+            var menuElement = document.createElement('div');
+            document.body.appendChild(menuElement);
+            var commands = [
+                new MenuCommand(null, { id: 'c1', type: 'button' }),
+                new MenuCommand(null, { id: 'c2', type: 'button' }),
+                new MenuCommand(null, { id: 'c3', type: 'button' })
+            ];
+            var menu = new Menu(menuElement, {
+                anchor: document.body,
+                commands: commands
+            });
+            var subMenuElement = document.createElement('div');
+            document.body.appendChild(subMenuElement);
+            var subMenu = new Menu(subMenuElement, {
+                anchor: commands[0],
+                commands: [
+                    new MenuCommand(null, { id: 'c1', type: 'button' }),
+                    new MenuCommand(null, { id: 'c2', type: 'button' }),
+                    new MenuCommand(null, { id: 'c3', type: 'button' })
+                ]
+            }); 
+                
+            WinJS.UI._lastInputType = InputTypes.mouse;
+            return OverlayHelpers.show(menu).then(() => {
+                LiveUnit.Assert.isTrue(WinJS.Utilities.hasClass(menuElement, _Constants.menuMouseSpacingClass),
+                    "Menu should use mouse spacing when last input type was mouse");
+                
+                WinJS.UI._lastInputType = InputTypes.touch;
+                OverlayHelpers.show(subMenu);
+            }).then(() => {
+                LiveUnit.Assert.isTrue(WinJS.Utilities.hasClass(menuElement, _Constants.menuMouseSpacingClass),
+                    "Menu shouldn't have switched spacing while it was shown");
+                LiveUnit.Assert.isTrue(WinJS.Utilities.hasClass(subMenuElement, _Constants.menuMouseSpacingClass),
+                    "Sub menu should use mouse spacing because that is what the rest of the cascade is using");
+                
+                OverlayHelpers.disposeAndRemove(menuElement);
+                OverlayHelpers.disposeAndRemove(subMenuElement);
+                complete();
+            });
+        }
     }
 }
 // register the object as a test class by passing in the name

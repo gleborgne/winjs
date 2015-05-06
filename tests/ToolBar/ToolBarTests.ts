@@ -7,10 +7,12 @@
 /// <reference path="../../typings/typings.d.ts" />
 /// <reference path="../TestLib/liveToQ/liveToQ.d.ts" />
 /// <reference path="../TestLib/winjs.dev.d.ts" />
+// <reference path="../TestData/ToolBar.less.css" />
 
 module CorsicaTests {
     var ToolBar = <typeof WinJS.UI.PrivateToolBar> WinJS.UI.ToolBar;
     var Command = <typeof WinJS.UI.PrivateCommand> WinJS.UI.AppBarCommand;
+    var _LightDismissService = <typeof WinJS.UI._LightDismissService>Helper.require("WinJS/_LightDismissService");
     var Util = WinJS.Utilities;
     var _Constants;
 
@@ -78,12 +80,18 @@ module CorsicaTests {
             newNode.id = "host";
             document.body.appendChild(newNode);
             this._element = newNode;
+            WinJS.Utilities.addClass(this._element, "file-toolbar-css");
         }
 
         tearDown() {
             if (this._element) {
+                if (this._element.winControl) {
+                    this._element.winControl.dispose();
+                }
                 WinJS.Utilities.disposeSubTree(this._element);
-                document.body.removeChild(this._element);
+                if (this._element.parentElement) {
+                    this._element.parentElement.removeChild(this._element);
+                }
                 this._element = null;
             }
         }
@@ -124,7 +132,7 @@ module CorsicaTests {
             LiveUnit.Assert.isNotNull(toolBar.element, "An element should be created when one is not passed to the constructor");
         }
 
-        testDataProperty() { 
+        testDataProperty() {
             // Verify default (empty)
             var toolBar = new ToolBar(this._element);
             LiveUnit.Assert.areEqual(0, toolBar.data.length, "Empty ToolBar should have length 0");
@@ -144,7 +152,7 @@ module CorsicaTests {
                 new Command(null, { type: _Constants.typeButton, label: "opt 2" })
             ]);
 
-            var toolBar = new ToolBar(this._element, {data: data});
+            var toolBar = new ToolBar(this._element, { data: data });
 
             // set data to invalid value
             var property = "data";
@@ -183,7 +191,12 @@ module CorsicaTests {
         }
 
         testDispose() {
-            var toolBar = new ToolBar(this._element);
+            this._element.style.width = "10px";
+            var data = new WinJS.Binding.List([
+                new Command(null, { type: _Constants.typeButton, label: "opt 1", section: 'primary' }),
+                new Command(null, { type: _Constants.typeButton, label: "opt 2", section: 'secondary' })
+            ]);
+            var toolBar = new ToolBar(this._element, { data: data });
             Helper.ToolBar.useSynchronousAnimations(toolBar);
             toolBar.open();
 
@@ -193,9 +206,22 @@ module CorsicaTests {
             toolBar.onafteropen = failEventHandler(_Constants.EventNames.afterOpen, msg);
             toolBar.onafterclose = failEventHandler(_Constants.EventNames.afterClose, msg);
 
+            var menuCommandProjections = Helper._CommandingSurface.getVisibleCommandsInElement(toolBar._commandingSurface._dom.overflowArea).map(function (element) {
+                return <WinJS.UI.PrivateMenuCommand>element.winControl;
+            });
+
             toolBar.dispose();
             LiveUnit.Assert.isTrue(toolBar._disposed, "ToolBar didn't mark itself as disposed");
             LiveUnit.Assert.isTrue(toolBar._commandingSurface._disposed, "ToolBar's commandingSurface was not disposed");
+
+            LiveUnit.Assert.isTrue(menuCommandProjections.every(function (menuCommand) {
+                return menuCommand._disposed;
+            }), "Disposing the ToolBar should have disposed all the overflowarea MenuCommands.");
+
+            LiveUnit.Assert.isTrue(toolBar.data.every(function (command) {
+                var privateCommand = <WinJS.UI.PrivateCommand>command;
+                return privateCommand._disposed;
+            }), "Disposing the ToolBar should have disposed all of its commands.");
 
             // Events should not fire
             toolBar.close();
@@ -225,7 +251,26 @@ module CorsicaTests {
             toolBar.dispose();
         }
 
+        testPlaceHolderDisposesOpenedToolBar() {
+            // The ToolBar moves itself to the Body when opened and leaves a placeholder element in its place.
+            // Verify that calling disposeSubTree on the placeholder element will trigger the ToolBar to dispose.
+
+            var toolBarEl = document.createElement("DIV");
+            this._element.appendChild(toolBarEl);
+
+            var data = new WinJS.Binding.List([
+                new Command(null, { type: _Constants.typeButton, label: "opt 1" }),
+                new Command(null, { type: _Constants.typeButton, label: "opt 2", section: _Constants.secondaryCommandSection })
+            ]);
+            var toolBar = new ToolBar(toolBarEl, { opened: true, data: data });
+
+            WinJS.Utilities.disposeSubTree(this._element);
+            LiveUnit.Assert.isTrue(toolBar._disposed, "Disposing the ToolBar's placeholder should dispose the ToolBar");
+        }
+
         testDisposeClosesToolBar() {
+            // When a ToolBar is opened, it reparents itself to the body. When it closes it moves back to its
+            // location in the DOM tree. Disposing an opened ToolBar closes it.
             var data = new WinJS.Binding.List([
                 new Command(null, { type: _Constants.typeButton, label: "opt 1" }),
                 new Command(null, { type: _Constants.typeButton, label: "opt 2", section: _Constants.secondaryCommandSection })
@@ -945,7 +990,7 @@ module CorsicaTests {
                 data: data
             });
 
-            LiveUnit.Assert.areEqual(0, WinJS.Utilities.getTotalHeight(toolBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container when there are no commands that overflow");
+            LiveUnit.Assert.areEqual(0, WinJS.Utilities._getPreciseTotalHeight(toolBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container when there are no commands that overflow");
         }
 
         xtestOverflowAreaContainerSize() { // TODO Finish redline changes and then reimplement
@@ -974,8 +1019,8 @@ module CorsicaTests {
             toolBar.forceLayout();
 
             LiveUnit.Assert.areEqual(2, Helper._CommandingSurface.getVisibleCommandsInElement(toolBar._commandingSurface._dom.overflowArea).length, "There should only be 2 commands in the overflowarea");
-            LiveUnit.Assert.areEqual(2 * _Constants.overflowCommandHeight, WinJS.Utilities.getTotalHeight(toolBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container");
-            LiveUnit.Assert.areEqual(parseInt(this._element.style.width), WinJS.Utilities.getTotalWidth(toolBar._commandingSurface._dom.overflowArea), "Invalid width for the overflowarea container");
+            LiveUnit.Assert.areEqual(2 * _Constants.overflowCommandHeight, WinJS.Utilities._getPreciseTotalHeight(toolBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container");
+            LiveUnit.Assert.areEqual(parseInt(this._element.style.width), WinJS.Utilities._getPreciseTotalWidth(toolBar._commandingSurface._dom.overflowArea), "Invalid width for the overflowarea container");
             LiveUnit.Assert.areEqual(toolBar.element, toolBar._commandingSurface._dom.overflowArea.parentNode, "Invalid parent for the overflowarea container");
             LiveUnit.Assert.areEqual(toolBar.element, toolBar._commandingSurface._dom.actionArea.parentNode, "Invalid parent for the actionarea container");
         }
@@ -998,7 +1043,7 @@ module CorsicaTests {
                 opened: true
             });
 
-            LiveUnit.Assert.areEqual(4.5 * _Constants.overflowCommandHeight, WinJS.Utilities.getTotalHeight(toolBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container");
+            LiveUnit.Assert.areEqual(4.5 * _Constants.overflowCommandHeight, WinJS.Utilities._getPreciseTotalHeight(toolBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container");
             LiveUnit.Assert.areEqual(9, Helper._CommandingSurface.getVisibleCommandsInElement(toolBar._commandingSurface._dom.overflowArea).length, "There should be 9 commands in the overflowarea");
         }
 
@@ -1026,7 +1071,7 @@ module CorsicaTests {
                 opened: true
             });
 
-            LiveUnit.Assert.areEqual(4.5 * _Constants.overflowCommandHeight, WinJS.Utilities.getTotalHeight(toolBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container");
+            LiveUnit.Assert.areEqual(4.5 * _Constants.overflowCommandHeight, WinJS.Utilities._getPreciseTotalHeight(toolBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container");
         }
 
         xtestKeyboarding_Opened(complete) { // TODO reimplement when new keyboarding model is decided
@@ -1230,7 +1275,7 @@ module CorsicaTests {
             LiveUnit.Assert.areEqual(3, Helper._CommandingSurface.getVisibleCommandsInElement(toolBar._commandingSurface._dom.actionArea).length);
 
             // Delete item wth label 3
-            toolBar.data.splice(2, 1)
+            toolBar.data.splice(2, 1);
 
             WinJS.Utilities.Scheduler.schedule(() => {
                 LiveUnit.Assert.areEqual("4", Helper._CommandingSurface.getVisibleCommandsInElement(toolBar._commandingSurface._dom.actionArea)[2].textContent);
@@ -1249,15 +1294,20 @@ module CorsicaTests {
                     // The actionarea should now show | new | 1 | 2  | ... |
                     LiveUnit.Assert.areEqual(3, Helper._CommandingSurface.getVisibleCommandsInElement(toolBar._commandingSurface._dom.actionArea).length);
 
+                    // Force all commands into the overflowarea
                     this._element.style.width = "10px";
                     toolBar.forceLayout();
 
-                    // Delete the first element
-                    toolBar.data.splice(0, 1);
+                    // Delete the first command and verify CommandingSurface Dom updates. 
+                    // Also verify that we dispose the deleted command's associated MenuCommand projection.
+                    var deletedCommand = toolBar.data.splice(0, 1)[0];
+                    var deletedMenuCommand = Helper._CommandingSurface.getProjectedCommandFromOriginalCommand(toolBar._commandingSurface, deletedCommand);
 
                     WinJS.Utilities.Scheduler.schedule(() => {
                         LiveUnit.Assert.areEqual(0, Helper._CommandingSurface.getVisibleCommandsInElement(toolBar._commandingSurface._dom.actionArea).length);
                         LiveUnit.Assert.areEqual(8, Helper._CommandingSurface.getVisibleCommandsInElement(toolBar._commandingSurface._dom.overflowArea).length);
+                        LiveUnit.Assert.isTrue(deletedMenuCommand._disposed,
+                            "Removing a command from the CommandingSurface's overflowarea should dispose the associated menucommand projection");
 
                         complete();
                     });
@@ -1293,17 +1343,171 @@ module CorsicaTests {
             // The actionarea should now show | 1 | 2 | 3 | ... |
             LiveUnit.Assert.areEqual(3, Helper._CommandingSurface.getVisibleCommandsInElement(toolBar._commandingSurface._dom.actionArea).length);
 
+            var menuCommandProjections = Helper._CommandingSurface.getVisibleCommandsInElement(toolBar._commandingSurface._dom.overflowArea).map(function (element) {
+                return <WinJS.UI.PrivateMenuCommand>element.winControl;
+            });
+
             // Delete all items
             toolBar.data = new WinJS.Binding.List([]);
 
             WinJS.Utilities.Scheduler.schedule(() => {
                 LiveUnit.Assert.areEqual(2, toolBar._commandingSurface._dom.actionArea.children.length, "Only the overflow button and spacer elements should be children.");
                 LiveUnit.Assert.areEqual(0, toolBar._commandingSurface._dom.overflowArea.children.length);
+                LiveUnit.Assert.isTrue(menuCommandProjections.every(function (menuCommand) {
+                    return menuCommand._disposed;
+                }), "Setting new data should have disposed all previous overflowarea MenuCommand projections.");
+
                 complete();
             }, WinJS.Utilities.Scheduler.Priority.high);
         }
 
+        testDataMutationsAreProjectedToOverflowCommands(complete) {
+            // Verifies that mutations to an ICommand in the actionarea are reflected to that ICommand's MenuCommand projection 
+            // in the overflowarea, if such a projection exists.
+            //
+
+            var buttonCmd = new Command(null, { type: _Constants.typeButton, label: "button", section: 'primary', extraClass: "myClass", });
+            var toggleCmd = new Command(null, { type: _Constants.typeToggle, label: 'toggle', section: 'primary' });
+            var flyoutCmd = new Command(null, { type: _Constants.typeFlyout, label: "flyout", section: 'primary' });
+
+            var data = new WinJS.Binding.List([buttonCmd, toggleCmd, flyoutCmd]);
+            this._element.style.width = "10px";
+            var toolBar = new ToolBar(this._element, { data: data, opened: true });
+            Helper.ToolBar.useSynchronousAnimations(toolBar);
+
+            var startingLength = 3;
+
+            // PRECONDITION: Test assumes there are 3 overflowing primary commands in the overflowarea.
+            LiveUnit.Assert.areEqual(startingLength, Helper._CommandingSurface.getVisibleCommandsInElement(toolBar._commandingSurface._dom.overflowArea).length,
+                "TEST ERROR: Test expects 3 overflowing commands at the start");
+
+            // Commands in the overflowarea are all MenuCommand projections of the original ICommands in the actionarea.
+            // These projections and the rest of the overflowarea are redrawn whenever the data in the binding list changes 
+            // or when certain properties of ICommands in the CommandingSurface are mutated.
+            var projections = {
+                get button() {
+                    return Helper._CommandingSurface.getProjectedCommandFromOriginalCommand(toolBar._commandingSurface, buttonCmd);
+                },
+                get toggle() {
+                    return Helper._CommandingSurface.getProjectedCommandFromOriginalCommand(toolBar._commandingSurface, toggleCmd);
+                },
+                get flyout() {
+                    return Helper._CommandingSurface.getProjectedCommandFromOriginalCommand(toolBar._commandingSurface, flyoutCmd);
+                }
+            }
+
+            var msg = " property of projected menucommand should have updated";
+
+            buttonCmd.label = "new label";
+            new WinJS.Promise((c) => {
+                toolBar._commandingSurface._layoutCompleteCallback = () => {
+                    LiveUnit.Assert.areEqual(buttonCmd.label, projections.button.label, "label" + msg);
+                    c();
+                };
+            }).then(
+                () => {
+                    buttonCmd.disabled = true;
+                    return new WinJS.Promise((c) => {
+                        toolBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.areEqual(buttonCmd.disabled, projections.button.disabled, "disabled" + msg);
+                            c();
+                        };
+                    });
+                }
+            ).then(
+                () => {
+                    buttonCmd.disabled = false;
+                    return new WinJS.Promise((c) => {
+                        toolBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.areEqual(buttonCmd.disabled, projections.button.disabled, "disabled" + msg);
+                            c();
+                        };
+                    });
+                }
+            ).then(
+                () => {
+                    buttonCmd.extraClass = "new class";
+                    return new WinJS.Promise((c) => {
+                        toolBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.areEqual(buttonCmd.extraClass, projections.button.extraClass, "extraClass" + msg);
+                            c();
+                        };
+                    });
+                }
+            ).then(
+                () => {
+                    buttonCmd.onclick = () => { };
+                    return new WinJS.Promise((c) => {
+                        toolBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.areEqual(buttonCmd.onclick, projections.button.onclick, "onclick" + msg);
+                            c();
+                        };
+                    });
+                }
+            ).then(
+                () => {
+                    buttonCmd.hidden = true;
+                    return new WinJS.Promise((c) => {
+                        toolBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.isNull(projections.button,
+                                "Setting hidden = true on an overflowing ICommand should remove its menucommand projection from the overflowarea");
+                            LiveUnit.Assert.areEqual(startingLength - 1, Helper._CommandingSurface.getVisibleCommandsInElement(toolBar._commandingSurface._dom.overflowArea).length,
+                                "Setting hidden = true on an overflowing ICommand should remove its menucommand projection from the overflowarea");
+                            c();
+                        };
+                    });
+                }
+            ).then(
+                () => {
+                    buttonCmd.hidden = false;
+                    return new WinJS.Promise((c) => {
+                        toolBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.isNotNull(projections.button,
+                                "Setting hidden = false on an overflowing ICommand should add a menucommand projection of it to the overflowarea");
+                            LiveUnit.Assert.areEqual(startingLength, Helper._CommandingSurface.getVisibleCommandsInElement(toolBar._commandingSurface._dom.overflowArea).length,
+                                "Setting hidden = false on an overflowing ICommand should add a menucommand projection of it to the overflowarea");
+                            c();
+                        };
+                    });
+                }
+            ).then(
+                () => {
+                    toggleCmd.selected = true;
+                    return new WinJS.Promise((c) => {
+                        toolBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.areEqual(toggleCmd.selected, projections.toggle.selected, "selected" + msg);
+                            c();
+                        };
+                    });
+                }
+            ).then(
+                () => {
+                    toggleCmd.selected = false;
+                    return new WinJS.Promise((c) => {
+                        toolBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.areEqual(toggleCmd.selected, projections.toggle.selected, "selected" + msg);
+                            c();
+                        };
+                    });
+                }
+            ).then(
+                () => {
+                    var flyout = new WinJS.UI.Flyout();
+                    flyoutCmd.flyout = flyout;
+                    return new WinJS.Promise((c) => {
+                        toolBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.areEqual(flyoutCmd.flyout, projections.flyout.flyout, "flyout" + msg);
+                            flyout.dispose();
+                            c();
+                        };
+                    });
+                }
+            ).done(complete);
+        }
+
         testSelectionAndGlobalSection() {
+            // Values of "global" and "selection" are deprecated starting in WinJS 4.0.
+            // Makes sure they are both just parsed as "primary" commands.
             this._element.style.width = "1000px";
             var data = new WinJS.Binding.List([
                 new Command(null, { type: _Constants.typeButton, label: "opt 1", section: 'selection' }),
@@ -1360,37 +1564,6 @@ module CorsicaTests {
             });
         }
 
-        testOpenedPropertyConstructorOptions() {
-            var toolBar = new ToolBar();
-            LiveUnit.Assert.areEqual(_Constants.defaultOpened, toolBar.opened, "opened property has incorrect default value");
-            toolBar.dispose();
-
-            [true, false].forEach(function (initiallyOpen) {
-                toolBar = new ToolBar(null, { opened: initiallyOpen });
-                LiveUnit.Assert.areEqual(initiallyOpen, toolBar.opened, "opened property does not match the value passed to the constructor.");
-                toolBar.dispose();
-            })
-        }
-
-        testTogglingOpenedProperty() {
-            var data = new WinJS.Binding.List([
-                new Command(null, { type: _Constants.typeButton, icon: 'add', label: "button" }),
-                new Command(null, { type: _Constants.typeSeparator }),
-                new Command(null, { type: _Constants.typeButton, section: 'secondary', label: "secondary" })
-            ]);
-            var toolBar = new ToolBar(this._element, { data: data, opened: false });
-            Helper.ToolBar.useSynchronousAnimations(toolBar);
-            Helper.ToolBar.verifyRenderedClosed(toolBar);
-
-            toolBar.opened = true;
-            LiveUnit.Assert.isTrue(toolBar.opened, "opened property should be writeable.");
-            Helper.ToolBar.verifyRenderedOpened(toolBar);
-
-            toolBar.opened = false;
-            LiveUnit.Assert.isFalse(toolBar.opened, "opened property should be writeable.");
-            Helper.ToolBar.verifyRenderedClosed(toolBar);
-        }
-
         testOpen() {
             var data = new WinJS.Binding.List([
                 new Command(null, { type: _Constants.typeButton, icon: 'add', label: "button" }),
@@ -1401,6 +1574,7 @@ module CorsicaTests {
             Helper.ToolBar.useSynchronousAnimations(toolBar);
 
             toolBar.open();
+
             LiveUnit.Assert.isTrue(toolBar.opened)
             Helper.ToolBar.verifyRenderedOpened(toolBar);
         }
@@ -1423,9 +1597,12 @@ module CorsicaTests {
             toolBar.onafterclose = failEventHandler(_Constants.EventNames.afterClose, msg);
 
             // Verify nothing changes when opening again.
+            var originalOpenedRect = toolBar.element.getBoundingClientRect();
             toolBar.open();
-            LiveUnit.Assert.isTrue(toolBar.opened)
+            LiveUnit.Assert.isTrue(toolBar.opened, "opened ToolBar should still be opened");
             Helper.ToolBar.verifyRenderedOpened(toolBar);
+            Helper.Assert.areBoundingClientRectsEqual(originalOpenedRect, toolBar.element.getBoundingClientRect(),
+                "opening an opened ToolBar should not affect its bounding client rect", 0);
         }
 
         testClose() {
@@ -1460,8 +1637,237 @@ module CorsicaTests {
             toolBar.onafterclose = failEventHandler(_Constants.EventNames.afterClose, msg);
 
             // Verify nothing changes when closing again.
+            var originalClosedRect = toolBar.element.getBoundingClientRect();
             toolBar.close();
             LiveUnit.Assert.isFalse(toolBar.opened)
+            Helper.ToolBar.verifyRenderedClosed(toolBar);
+            Helper.Assert.areBoundingClientRectsEqual(originalClosedRect, toolBar.element.getBoundingClientRect(),
+                "closing a closed ToolBar should not change affect bounding client rect", 0);
+        }
+
+        testToolBarElementReturnsToOriginalParentElement_AfterClosing() {
+            var data = new WinJS.Binding.List([
+                new Command(null, { type: _Constants.typeButton, icon: 'add', label: "button" }),
+                new Command(null, { type: _Constants.typeSeparator }),
+                new Command(null, { type: _Constants.typeButton, section: 'secondary', label: "secondary" })
+            ]);
+
+            var toolBarEl = document.createElement("DIV"),
+                prevSibling = document.createElement("DIV"),
+                nextSibling = document.createElement("DIV");
+
+            this._element.appendChild(prevSibling);
+            this._element.appendChild(toolBarEl);
+            this._element.appendChild(nextSibling);
+
+            var toolBar = new ToolBar(toolBarEl, { data: data, opened: false });
+            Helper.ToolBar.useSynchronousAnimations(toolBar);
+
+            // Opening the ToolBar will move it to the body. 
+            // Verify that closing the ToolBar moves it back into the correct DOM location of its parent element.
+            toolBar.open();
+            toolBar.close();
+
+            LiveUnit.Assert.isTrue(this._element.children[0] === prevSibling, "prevSibling should remain at index 0");
+            LiveUnit.Assert.isTrue(this._element.children[1] === toolBar.element, "toolBar should remain at index 1");
+            LiveUnit.Assert.isTrue(this._element.children[2] === nextSibling, "nextSibling should remain at index 2");
+        }
+
+        testOpeningOrClosingToolBar_DoesNotReflowDOMContent() {
+            var data = new WinJS.Binding.List([
+                new Command(null, { type: _Constants.typeButton, icon: 'add', label: "button" }),
+                new Command(null, { type: _Constants.typeSeparator }),
+                new Command(null, { type: _Constants.typeButton, section: 'secondary', label: "secondary" })
+            ]);
+
+            var toolBarEl = document.createElement("DIV"),
+                prevSibling = document.createElement("DIV"),
+                nextSibling = document.createElement("DIV");
+
+            this._element.appendChild(prevSibling);
+            this._element.appendChild(toolBarEl);
+            this._element.appendChild(nextSibling);
+
+            var toolBar = new ToolBar(toolBarEl, { data: data, opened: false });
+            Helper.ToolBar.useSynchronousAnimations(toolBar);
+
+            // Ensure elements have dimensions
+            this._element.style.height = "auto";
+            this._element.style.width = "50px";
+            prevSibling.style.height = "10px";
+            prevSibling.style.width = "10px";
+            nextSibling.style.height = "10px";
+            nextSibling.style.width = "10px";
+
+            // When the ToolBar is opened it will move itself to the body and leave a placeholder element 
+            // of the same size in its place. When the ToolBar is closed, it returns to its original parent 
+            // element. Verify that opening and closing the ToolBar does not reflow the content around it.
+            var parentRect = this._element.getBoundingClientRect();
+            var prevSiblingRect = prevSibling.getBoundingClientRect();
+            var nextSiblingRect = nextSibling.getBoundingClientRect();
+
+            toolBar.open();
+            Helper.Assert.areBoundingClientRectsEqual(parentRect, this._element.getBoundingClientRect(),
+                "Opening the ToolBar should not cause its parent element to reflow.", 1);
+            Helper.Assert.areBoundingClientRectsEqual(prevSiblingRect, prevSibling.getBoundingClientRect(),
+                "Opening the ToolBar should not cause its previous sibling element to reflow.", 1);
+            Helper.Assert.areBoundingClientRectsEqual(nextSiblingRect, nextSibling.getBoundingClientRect(),
+                "Opening the ToolBar should not cause its next sibling element to reflow.", 1);
+
+            toolBar.close();
+            Helper.Assert.areBoundingClientRectsEqual(parentRect, this._element.getBoundingClientRect(),
+                "Closing the ToolBar should not cause its parent element to reflow.", 1);
+            Helper.Assert.areBoundingClientRectsEqual(prevSiblingRect, prevSibling.getBoundingClientRect(),
+                "Closing the ToolBar should not cause its previous sibling element to reflow.", 1);
+            Helper.Assert.areBoundingClientRectsEqual(nextSiblingRect, nextSibling.getBoundingClientRect(),
+                "Closing the ToolBar should not cause its next sibling element to reflow.", 1);
+        }
+
+        testAutoOverFlowDirection() {
+            var data = new WinJS.Binding.List([
+                new Command(null, { type: _Constants.typeButton, icon: 'add', label: "primary1" }),
+                new Command(null, { type: _Constants.typeSeparator }),
+                new Command(null, { type: _Constants.typeButton, section: 'secondary', label: "secondary1" }),
+                new Command(null, { type: _Constants.typeButton, icon: 'delete', label: "primary2" }),
+                new Command(null, { type: _Constants.typeSeparator, section: 'secondary' }),
+                new Command(null, { type: _Constants.typeButton, section: 'secondary', label: "secondary2" })
+            ]);
+
+            // Put ToolBar inside of a fixed position element. We can easily move it around the viewport.
+            var toolBarEl = document.createElement("DIV");
+            var container = document.createElement("DIV");
+            this._element.appendChild(container);
+            container.appendChild(toolBarEl);
+            container.style.position = "fixed";
+            container.style.width = "100px";
+            container.style.height = "auto";
+            container.style.padding = "0";
+            container.style.border = "none";
+            container.style.margin = "0";
+
+            var toolBar = new ToolBar(toolBarEl, { data: data });
+            Helper.ToolBar.useSynchronousAnimations(toolBar);
+
+            // Start from a sane place and verify that the ToolBar's parent element is sized to content.
+            LiveUnit.Assert.areEqual(WinJS.Utilities._getPreciseTotalHeight(toolBarEl),
+                WinJS.Utilities._getPreciseContentHeight(container),
+                "TEST ERROR: ToolBar's container element must size to content.");
+
+            // Vertically center the closed ToolBar's content box.
+            var topOfViewport = 0;
+            var bottomOfViewport = window.innerHeight;
+            var middleOfViewport = window.innerHeight / 2;
+            var closedStyle = getComputedStyle(toolBar._dom.root);
+            var paddingTop = WinJS.Utilities._convertToPrecisePixels(closedStyle.paddingTop);
+            var borderTop = WinJS.Utilities._convertToPrecisePixels(closedStyle.borderTopWidth);
+            var marginTop = WinJS.Utilities._convertToPrecisePixels(closedStyle.marginTop);
+            var contentHeight = WinJS.Utilities._getPreciseContentHeight(toolBarEl);
+            var nextContainerTop = middleOfViewport - (contentHeight / 2) - paddingTop - borderTop - marginTop;
+
+            container.style.top = nextContainerTop + "px";
+
+            // Sanity check our enviornment and verify that the ToolBar element's content box height is centered
+            // around the mid point of the viewport.
+
+            var toolBarRect = toolBarEl.getBoundingClientRect();
+            var contentRectTop = toolBarRect.top + borderTop + paddingTop;
+            var middleOfContentBox = contentRectTop + (contentHeight / 2);
+            Helper.Assert.areFloatsEqual(middleOfViewport, middleOfContentBox,
+                "TEST ERROR, Test failed to correctly set enviornment. The content box should be centered " +
+                "around the middpoint of the viewport height", 1);
+
+            // Verify that an opened toolbar will automatically overflow in the direction (top/bottom) that has
+            // the most available space between the viewport and content box.
+
+            // Pull the center of the content box up one pixel from the middle of the viewport. 
+            nextContainerTop -= 1;
+            container.style.top = nextContainerTop + "px";
+
+            // Now that we are above center, verify that ToolBar opens downwards.
+            toolBar.open();
+            LiveUnit.Assert.areEqual(_Constants.OverflowDirection.bottom,
+                toolBar._commandingSurface.overflowDirection,
+                "ToolBar should overflow bottom when there is more space below the content box than above it.");
+            toolBar.close();
+
+            // Move the center of the content box down to just 1 pixel below the middle of the viewport
+            nextContainerTop += 2;
+            container.style.top = nextContainerTop + "px";
+
+            // Now that we are below center, verify that ToolBar opens upwards.
+            toolBar.open();
+            LiveUnit.Assert.areEqual(_Constants.OverflowDirection.top,
+                toolBar._commandingSurface.overflowDirection,
+                "ToolBar should overflow top when there is more space aboce the content box than below it.");
+        }
+
+        testToolBarRetainsViewPortCoordinatesWhenOpenedAndClosed() {
+            var data = new WinJS.Binding.List([
+                new Command(null, { type: _Constants.typeButton, icon: 'add', label: "button" }),
+                new Command(null, { type: _Constants.typeSeparator }),
+                new Command(null, { type: _Constants.typeButton, section: 'secondary', label: "secondary" })
+            ]);
+
+            var toolBar = new ToolBar(this._element, { data: data, opened: false });
+            Helper.ToolBar.useSynchronousAnimations(toolBar);
+            var closedRect = toolBar.element.getBoundingClientRect();
+
+            toolBar.open();
+            var openedRect = toolBar.element.getBoundingClientRect();
+            // We expect the coordinates of either the top or bottom edge of the opened ToolBar will change
+            // based on the overflowDirection chosen for the commanding surface. Verify that the other
+            // edges have not changed coordinates.
+            Helper.Assert.areFloatsEqual(closedRect.left, openedRect.left,
+                "Opening a ToolBar should not affect its left edge viewport coordinate", 1);
+            Helper.Assert.areFloatsEqual(closedRect.right, openedRect.right,
+                "Opening a ToolBar should not affect its right edge viewport coordinate", 1);
+
+            switch (toolBar._commandingSurface.overflowDirection) {
+                case _Constants.OverflowDirection.top:
+                    Helper.Assert.areFloatsEqual(closedRect.bottom, openedRect.bottom,
+                        "Opening a ToolBar should not affect its bottom edge viewport coordinate", 1);
+                    break;
+                case _Constants.OverflowDirection.bottom:
+                    Helper.Assert.areFloatsEqual(closedRect.top, openedRect.top,
+                        "Opening a ToolBar should not affect its top edge viewport coordinate", 1);
+                    break;
+                default:
+                    LiveUnit.Assert.fail("Unexpexted OverflowDirection enum value");
+            }
+
+            toolBar.close();
+            Helper.Assert.areBoundingClientRectsEqual(closedRect, toolBar.element.getBoundingClientRect(),
+                "Closing a ToolBar should not affect its viewport coordinates", 0)
+        }
+
+        testOpenedPropertyConstructorOptions() {
+            var toolBar = new ToolBar();
+            LiveUnit.Assert.areEqual(_Constants.defaultOpened, toolBar.opened, "opened property has incorrect default value");
+            toolBar.dispose();
+
+            [true, false].forEach(function (initiallyOpen) {
+                toolBar = new ToolBar(null, { opened: initiallyOpen });
+                LiveUnit.Assert.areEqual(initiallyOpen, toolBar.opened, "opened property does not match the value passed to the constructor.");
+                toolBar.dispose();
+            });
+        }
+
+        testTogglingOpenedProperty() {
+            var data = new WinJS.Binding.List([
+                new Command(null, { type: _Constants.typeButton, icon: 'add', label: "button" }),
+                new Command(null, { type: _Constants.typeSeparator }),
+                new Command(null, { type: _Constants.typeButton, section: 'secondary', label: "secondary" })
+            ]);
+            var toolBar = new ToolBar(this._element, { data: data, opened: false });
+            Helper.ToolBar.useSynchronousAnimations(toolBar);
+            Helper.ToolBar.verifyRenderedClosed(toolBar);
+
+            toolBar.opened = true;
+            LiveUnit.Assert.isTrue(toolBar.opened, "opened property should be writeable.");
+            Helper.ToolBar.verifyRenderedOpened(toolBar);
+
+            toolBar.opened = false;
+            LiveUnit.Assert.isFalse(toolBar.opened, "opened property should be writeable.");
             Helper.ToolBar.verifyRenderedClosed(toolBar);
         }
 
@@ -1552,18 +1958,121 @@ module CorsicaTests {
 <<<<<<< HEAD
 =======
 
-        testBackgroundColorPercolatesToCommandingSurface() {
-            // Verifies that background color changes to the ToolBar are not impeded by the CommandingSurface element.
+        testShowingIHMClosesToolBar() {
             var toolBar = new ToolBar(this._element, { opened: true });
-            var commandingSurface = toolBar._commandingSurface;
 
-            toolBar.element.style.backgroundColor = "rgb(255, 100, 05)";
-            var toolBarStyle = getComputedStyle(toolBar.element),
-                commandingSurfaceStyle = getComputedStyle(commandingSurface.element);
+            toolBar._handleShowingKeyboard();
 
-            var msg = "AppBar's commandingSurface element should match the background color of the AppBar element";
-            LiveUnit.LoggingCore.logComment("Test: " + msg);
-            LiveUnit.Assert.areEqual(toolBarStyle.backgroundColor, commandingSurfaceStyle.backgroundColor, msg);
+            LiveUnit.Assert.isFalse(toolBar.opened);
+
+        }
+
+        testGetCommandById() {
+            var data = new WinJS.Binding.List([
+                new Command(null, { type: _Constants.typeButton, label: "A", id: "extraneous" })
+            ]);
+
+            this._element.style.width = "10px";
+            var toolBar = new ToolBar(this._element, {
+                data: data
+            });
+            LiveUnit.Assert.isNull(toolBar.getCommandById("someID"));
+
+            var firstAddedCommand = new Command(null, { type: _Constants.typeButton, label: "B", id: "someID" });
+            data.push(firstAddedCommand);
+            LiveUnit.Assert.areEqual(firstAddedCommand, toolBar.getCommandById("someID"));
+
+            var secondAddedCommand = new Command(null, { type: _Constants.typeButton, label: "C", id: "someID" });
+            data.push(secondAddedCommand);
+
+            LiveUnit.Assert.areEqual(firstAddedCommand, toolBar.getCommandById("someID"));
+        }
+
+        testShowOnlyCommands() {
+            var data = new WinJS.Binding.List([
+                new Command(null, { type: _Constants.typeButton, label: "A", id: "A" }),
+                new Command(null, { type: _Constants.typeButton, label: "B", id: "B" }),
+                new Command(null, { type: _Constants.typeButton, label: "C", id: "C" }),
+                new Command(null, { type: _Constants.typeButton, label: "D", id: "D" }),
+                new Command(null, { type: _Constants.typeButton, label: "E", id: "E" })
+            ]);
+
+            this._element.style.width = "10px";
+            var toolBar = new ToolBar(this._element, {
+                data: data
+            });
+            
+            function checkCommandVisibility(expectedShown, expectedHidden) {
+                for (var i = 0, len = expectedShown.length; i < len; i++) {
+                    LiveUnit.Assert.areEqual("inline-block", toolBar.getCommandById(expectedShown[i]).element.style.display);
+                }
+                for (var i = 0, len = expectedHidden.length; i < len; i++) {
+                    LiveUnit.Assert.areEqual("none", toolBar.getCommandById(expectedHidden[i]).element.style.display);
+                }
+            }
+
+            toolBar.showOnlyCommands([]);
+            checkCommandVisibility([], ["A", "B", "C", "D", "E"]);
+
+            toolBar.showOnlyCommands(["A", "B", "C", "D", "E"]);
+            checkCommandVisibility(["A", "B", "C", "D", "E"], []);
+
+            toolBar.showOnlyCommands(["A"]);
+            checkCommandVisibility(["A"], ["B", "C", "D", "E"]);
+
+            toolBar.showOnlyCommands([data.getAt(1)]);
+            checkCommandVisibility(["B"], ["A", "C", "D", "E"]);
+
+            toolBar.showOnlyCommands(["C", data.getAt(4)]);
+            checkCommandVisibility(["C", "E"], ["A", "B", "D"]);
+        }
+
+        private _testLightDismissWithTrigger(dismissToolBar) {
+            var button = document.createElement("button");
+            button.textContent = "Initially Focused";
+            var element = document.createElement("div");
+
+            this._element.appendChild(button);
+            this._element.appendChild(element);
+
+            var toolBar = new ToolBar(element, {
+                data: new WinJS.Binding.List([
+                    new Command(null, { type: _Constants.typeButton, icon: 'add', label: "add" }),
+                    new Command(null, { type: _Constants.typeButton, icon: 'remove', label: "remove" }),
+                    new Command(null, { type: _Constants.typeButton, icon: 'accept', label: "accept" }),
+                    new Command(null, { type: _Constants.typeSeparator }),
+                    new Command(null, { type: _Constants.typeButton, section: 'secondary', label: "secondary" })
+                ])
+            });
+            Helper.ToolBar.useSynchronousAnimations(toolBar);
+
+            return Helper.focus(button).then(() => {
+                LiveUnit.Assert.areEqual(button, document.activeElement, "Button should have focus initially");
+
+                return Helper.waitForFocusWithin(toolBar.element, () => { toolBar.open(); });
+            }).then(() => {
+                    LiveUnit.Assert.areEqual(toolBar.data.getAt(0).element, document.activeElement,
+                        "ToolBar's leftmost primary command should have focus after opening");
+                    LiveUnit.Assert.isTrue(_LightDismissService.isTopmost(toolBar._dismissable),
+                        "ToolBar should be the topmost light dismissable");
+
+                    return Helper.waitForFocus(button, () => { dismissToolBar(toolBar); });
+                }).then(() => {
+                    LiveUnit.Assert.areEqual(button, document.activeElement,
+                        "Focus should have been restored to the button");
+                    LiveUnit.Assert.isFalse(_LightDismissService.isShown(toolBar._dismissable),
+                        "ToolBar should not be in the light dismissable stack");
+                });
+        }
+
+        testLightDismissWithClose(complete) {
+            this._testLightDismissWithTrigger((toolBar) => { toolBar.close(); }).then(complete);
+        }
+        testLightDismissWithDispose(complete) {
+            this._testLightDismissWithTrigger((toolBar) => { toolBar.dispose(); }).then(complete);
+        }
+        testLightDismissWithTap(complete) {
+            this._testLightDismissWithTrigger((toolBar) => { _LightDismissService._clickEaterTapped(); }).then(complete);
         }
 >>>>>>> upstream/master
     }

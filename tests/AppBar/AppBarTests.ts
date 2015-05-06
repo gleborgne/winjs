@@ -7,22 +7,20 @@
 /// <reference path="../../typings/typings.d.ts" />
 /// <reference path="../TestLib/liveToQ/liveToQ.d.ts" />
 /// <reference path="../TestLib/winjs.dev.d.ts" />
+// <reference path="../TestData/AppBar.less.css" />
 
 module CorsicaTests {
     var AppBar = <typeof WinJS.UI.PrivateAppBar> WinJS.UI.AppBar;
     var Command = <typeof WinJS.UI.PrivateCommand> WinJS.UI.AppBarCommand;
+    var _LightDismissService = <typeof WinJS.UI._LightDismissService>Helper.require("WinJS/_LightDismissService");
     var Util = WinJS.Utilities;
-    var _Constants;
-
-    WinJS.Utilities._require(["WinJS/Controls/AppBar/_Constants"], function (constants) {
-        _Constants = constants;
-    })
+    var _Constants = Helper.require("WinJS/Controls/AppBar/_Constants");
 
     // Taking the registration mechanism as a parameter allows us to use this code to test both
     // DOM level 0 (e.g. onbeforeopen) and DOM level 2 (e.g. addEventListener) events.
     function testEvents(testElement, registerForEvent: (appBar: WinJS.UI.PrivateAppBar, eventName: string, handler: Function) => void) {
         var appBar = new AppBar(testElement);
-        Helper._CommandingSurface.useSynchronousAnimations(appBar._commandingSurface);
+        Helper.AppBar.useSynchronousAnimations(appBar);
 
         var counter = 0;
         registerForEvent(appBar, _Constants.EventNames.beforeOpen, () => {
@@ -78,12 +76,18 @@ module CorsicaTests {
             newNode.id = "host";
             document.body.appendChild(newNode);
             this._element = newNode;
+            WinJS.Utilities.addClass(this._element, "file-appbar-css");
         }
 
         tearDown() {
             if (this._element) {
+                if (this._element.winControl) {
+                    this._element.winControl.dispose();
+                }
                 WinJS.Utilities.disposeSubTree(this._element);
-                document.body.removeChild(this._element);
+                if (this._element.parentElement) {
+                    this._element.parentElement.removeChild(this._element);
+                }
                 this._element = null;
             }
         }
@@ -124,7 +128,7 @@ module CorsicaTests {
             LiveUnit.Assert.isNotNull(appBar.element, "An element should be created when one is not passed to the constructor");
         }
 
-        testDataProperty() { 
+        testDataProperty() {
             // Verify default (empty)
             var appBar = new AppBar(this._element);
             LiveUnit.Assert.areEqual(0, appBar.data.length, "Empty AppBar should have length 0");
@@ -144,7 +148,7 @@ module CorsicaTests {
                 new Command(null, { type: _Constants.typeButton, label: "opt 2" })
             ]);
 
-            var appBar = new AppBar(this._element, {data: data});
+            var appBar = new AppBar(this._element, { data: data });
 
             // set data to invalid value
             var property = "data";
@@ -183,8 +187,13 @@ module CorsicaTests {
         }
 
         testDispose() {
-            var appBar = new AppBar(this._element);
-            Helper._CommandingSurface.useSynchronousAnimations(appBar._commandingSurface);
+            this._element.style.width = "10px";
+            var data = new WinJS.Binding.List([
+                new Command(null, { type: _Constants.typeButton, label: "opt 1", section: 'primary' }),
+                new Command(null, { type: _Constants.typeButton, label: "opt 2", section: 'secondary' })
+            ]);
+            var appBar = new AppBar(this._element, { data: data });
+            Helper.AppBar.useSynchronousAnimations(appBar);
             appBar.open();
 
             var msg = "Shouldn't have fired due to control being disposed";
@@ -193,9 +202,22 @@ module CorsicaTests {
             appBar.onafteropen = failEventHandler(_Constants.EventNames.afterOpen, msg);
             appBar.onafterclose = failEventHandler(_Constants.EventNames.afterClose, msg);
 
+            var menuCommandProjections = Helper._CommandingSurface.getVisibleCommandsInElement(appBar._commandingSurface._dom.overflowArea).map(function (element) {
+                return <WinJS.UI.PrivateMenuCommand>element.winControl;
+            });
+
             appBar.dispose();
             LiveUnit.Assert.isTrue(appBar._disposed, "AppBar didn't mark itself as disposed");
             LiveUnit.Assert.isTrue(appBar._commandingSurface._disposed, "AppBar's commandingSurface was not disposed");
+
+            LiveUnit.Assert.isTrue(menuCommandProjections.every(function (menuCommand) {
+                return menuCommand._disposed;
+            }), "Disposing the AppBar should have disposed all the overflowarea MenuCommands.");
+
+            LiveUnit.Assert.isTrue(appBar.data.every(function (command) {
+                var privateCommand = <WinJS.UI.PrivateCommand>command;
+                return privateCommand._disposed;
+            }), "Disposing the AppBar should have disposed all of its commands.");
 
             // Events should not fire
             appBar.close();
@@ -929,7 +951,7 @@ module CorsicaTests {
                 data: data
             });
 
-            LiveUnit.Assert.areEqual(0, WinJS.Utilities.getTotalHeight(appBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container when there are no commands that overflow");
+            LiveUnit.Assert.areEqual(0, WinJS.Utilities._getPreciseTotalHeight(appBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container when there are no commands that overflow");
         }
 
         xtestOverflowAreaContainerSize() { // TODO Finish redline changes and then reimplement
@@ -958,8 +980,8 @@ module CorsicaTests {
             appBar.forceLayout();
 
             LiveUnit.Assert.areEqual(2, Helper._CommandingSurface.getVisibleCommandsInElement(appBar._commandingSurface._dom.overflowArea).length, "There should only be 2 commands in the overflowarea");
-            LiveUnit.Assert.areEqual(2 * _Constants.overflowCommandHeight, WinJS.Utilities.getTotalHeight(appBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container");
-            LiveUnit.Assert.areEqual(parseInt(this._element.style.width), WinJS.Utilities.getTotalWidth(appBar._commandingSurface._dom.overflowArea), "Invalid width for the overflowarea container");
+            LiveUnit.Assert.areEqual(2 * _Constants.overflowCommandHeight, WinJS.Utilities._getPreciseTotalHeight(appBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container");
+            LiveUnit.Assert.areEqual(parseInt(this._element.style.width), WinJS.Utilities._getPreciseTotalWidth(appBar._commandingSurface._dom.overflowArea), "Invalid width for the overflowarea container");
             LiveUnit.Assert.areEqual(appBar.element, appBar._commandingSurface._dom.overflowArea.parentNode, "Invalid parent for the overflowarea container");
             LiveUnit.Assert.areEqual(appBar.element, appBar._commandingSurface._dom.actionArea.parentNode, "Invalid parent for the actionarea container");
         }
@@ -982,7 +1004,7 @@ module CorsicaTests {
                 opened: true
             });
 
-            LiveUnit.Assert.areEqual(4.5 * _Constants.overflowCommandHeight, WinJS.Utilities.getTotalHeight(appBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container");
+            LiveUnit.Assert.areEqual(4.5 * _Constants.overflowCommandHeight, WinJS.Utilities._getPreciseTotalHeight(appBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container");
             LiveUnit.Assert.areEqual(9, Helper._CommandingSurface.getVisibleCommandsInElement(appBar._commandingSurface._dom.overflowArea).length, "There should be 9 commands in the overflowarea");
         }
 
@@ -1010,7 +1032,7 @@ module CorsicaTests {
                 opened: true
             });
 
-            LiveUnit.Assert.areEqual(4.5 * _Constants.overflowCommandHeight, WinJS.Utilities.getTotalHeight(appBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container");
+            LiveUnit.Assert.areEqual(4.5 * _Constants.overflowCommandHeight, WinJS.Utilities._getPreciseTotalHeight(appBar._commandingSurface._dom.overflowArea), "Invalid height for the overflowarea container");
         }
 
         xtestKeyboarding_Opened(complete) { // TODO reimplement when new keyboarding model is decided
@@ -1214,7 +1236,7 @@ module CorsicaTests {
             LiveUnit.Assert.areEqual(3, Helper._CommandingSurface.getVisibleCommandsInElement(appBar._commandingSurface._dom.actionArea).length);
 
             // Delete item wth label 3
-            appBar.data.splice(2, 1)
+            appBar.data.splice(2, 1);
 
             WinJS.Utilities.Scheduler.schedule(() => {
                 LiveUnit.Assert.areEqual("4", Helper._CommandingSurface.getVisibleCommandsInElement(appBar._commandingSurface._dom.actionArea)[2].textContent);
@@ -1233,15 +1255,20 @@ module CorsicaTests {
                     // The actionarea should now show | new | 1 | 2  | ... |
                     LiveUnit.Assert.areEqual(3, Helper._CommandingSurface.getVisibleCommandsInElement(appBar._commandingSurface._dom.actionArea).length);
 
+                    // Force all commands into the overflowarea
                     this._element.style.width = "10px";
                     appBar.forceLayout();
 
-                    // Delete the first element
-                    appBar.data.splice(0, 1);
+                    // Delete the first command and verify AppBar Dom updates. 
+                    // Also verify that we dispose the deleted command's associated MenuCommand projection.
+                    var deletedCommand = appBar.data.splice(0, 1)[0];
+                    var deletedMenuCommand = Helper._CommandingSurface.getProjectedCommandFromOriginalCommand(appBar._commandingSurface, deletedCommand);
 
                     WinJS.Utilities.Scheduler.schedule(() => {
                         LiveUnit.Assert.areEqual(0, Helper._CommandingSurface.getVisibleCommandsInElement(appBar._commandingSurface._dom.actionArea).length);
                         LiveUnit.Assert.areEqual(8, Helper._CommandingSurface.getVisibleCommandsInElement(appBar._commandingSurface._dom.overflowArea).length);
+                        LiveUnit.Assert.isTrue(deletedMenuCommand._disposed,
+                            "Removing a command from the CommandingSurface's overflowarea should dispose the associated menucommand projection");
 
                         complete();
                     });
@@ -1277,17 +1304,171 @@ module CorsicaTests {
             // The actionarea should now show | 1 | 2 | 3 | ... |
             LiveUnit.Assert.areEqual(3, Helper._CommandingSurface.getVisibleCommandsInElement(appBar._commandingSurface._dom.actionArea).length);
 
+            var menuCommandProjections = Helper._CommandingSurface.getVisibleCommandsInElement(appBar._commandingSurface._dom.overflowArea).map(function (element) {
+                return <WinJS.UI.PrivateMenuCommand>element.winControl;
+            });
+
             // Delete all items
             appBar.data = new WinJS.Binding.List([]);
 
             WinJS.Utilities.Scheduler.schedule(() => {
                 LiveUnit.Assert.areEqual(2, appBar._commandingSurface._dom.actionArea.children.length, "Only the overflow button and spacer elements should be children.");
                 LiveUnit.Assert.areEqual(0, appBar._commandingSurface._dom.overflowArea.children.length);
+                LiveUnit.Assert.isTrue(menuCommandProjections.every(function (menuCommand) {
+                    return menuCommand._disposed;
+                }), "Setting new data should have disposed all previous overflowarea MenuCommand projections.");
+
                 complete();
             }, WinJS.Utilities.Scheduler.Priority.high);
         }
 
+        testDataMutationsAreProjectedToOverflowCommands(complete) {
+            // Verifies that mutations to an ICommand in the actionarea are reflected to that ICommand's MenuCommand projection 
+            // in the overflowarea, if such a projection exists.
+            //
+
+            var buttonCmd = new Command(null, { type: _Constants.typeButton, label: "button", section: 'primary', extraClass: "myClass", });
+            var toggleCmd = new Command(null, { type: _Constants.typeToggle, label: 'toggle', section: 'primary' });
+            var flyoutCmd = new Command(null, { type: _Constants.typeFlyout, label: "flyout", section: 'primary' });
+
+            var data = new WinJS.Binding.List([buttonCmd, toggleCmd, flyoutCmd]);
+            this._element.style.width = "10px";
+            var appBar = new AppBar(this._element, { data: data, opened: true });
+            Helper.AppBar.useSynchronousAnimations(appBar);
+
+            var startingLength = 3;
+
+            // PRECONDITION: Test assumes there are 3 overflowing primary commands in the overflowarea.
+            LiveUnit.Assert.areEqual(startingLength, Helper._CommandingSurface.getVisibleCommandsInElement(appBar._commandingSurface._dom.overflowArea).length,
+                "TEST ERROR: Test expects 3 overflowing commands at the start");
+
+            // Commands in the overflowarea are all MenuCommand projections of the original ICommands in the actionarea.
+            // These projections and the rest of the overflowarea are redrawn whenever the data in the binding list changes 
+            // or when certain properties of ICommands in the CommandingSurface are mutated.
+            var projections = {
+                get button() {
+                    return Helper._CommandingSurface.getProjectedCommandFromOriginalCommand(appBar._commandingSurface, buttonCmd);
+                },
+                get toggle() {
+                    return Helper._CommandingSurface.getProjectedCommandFromOriginalCommand(appBar._commandingSurface, toggleCmd);
+                },
+                get flyout() {
+                    return Helper._CommandingSurface.getProjectedCommandFromOriginalCommand(appBar._commandingSurface, flyoutCmd);
+                }
+            }
+
+            var msg = " property of projected menucommand should have updated";
+
+            buttonCmd.label = "new label";
+            new WinJS.Promise((c) => {
+                appBar._commandingSurface._layoutCompleteCallback = () => {
+                    LiveUnit.Assert.areEqual(buttonCmd.label, projections.button.label, "label" + msg);
+                    c();
+                };
+            }).then(
+                () => {
+                    buttonCmd.disabled = true;
+                    return new WinJS.Promise((c) => {
+                        appBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.areEqual(buttonCmd.disabled, projections.button.disabled, "disabled" + msg);
+                            c();
+                        };
+                    });
+                }
+                ).then(
+                () => {
+                    buttonCmd.disabled = false;
+                    return new WinJS.Promise((c) => {
+                        appBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.areEqual(buttonCmd.disabled, projections.button.disabled, "disabled" + msg);
+                            c();
+                        };
+                    });
+                }
+                ).then(
+                () => {
+                    buttonCmd.extraClass = "new class";
+                    return new WinJS.Promise((c) => {
+                        appBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.areEqual(buttonCmd.extraClass, projections.button.extraClass, "extraClass" + msg);
+                            c();
+                        };
+                    });
+                }
+                ).then(
+                () => {
+                    buttonCmd.onclick = () => { };
+                    return new WinJS.Promise((c) => {
+                        appBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.areEqual(buttonCmd.onclick, projections.button.onclick, "onclick" + msg);
+                            c();
+                        };
+                    });
+                }
+                ).then(
+                () => {
+                    buttonCmd.hidden = true;
+                    return new WinJS.Promise((c) => {
+                        appBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.isNull(projections.button,
+                                "Setting hidden = true on an overflowing ICommand should remove its menucommand projection from the overflowarea");
+                            LiveUnit.Assert.areEqual(startingLength - 1, Helper._CommandingSurface.getVisibleCommandsInElement(appBar._commandingSurface._dom.overflowArea).length,
+                                "Setting hidden = true on an overflowing ICommand should remove its menucommand projection from the overflowarea");
+                            c();
+                        };
+                    });
+                }
+                ).then(
+                () => {
+                    buttonCmd.hidden = false;
+                    return new WinJS.Promise((c) => {
+                        appBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.isNotNull(projections.button,
+                                "Setting hidden = false on an overflowing ICommand should add a menucommand projection of it to the overflowarea");
+                            LiveUnit.Assert.areEqual(startingLength, Helper._CommandingSurface.getVisibleCommandsInElement(appBar._commandingSurface._dom.overflowArea).length,
+                                "Setting hidden = false on an overflowing ICommand should add a menucommand projection of it to the overflowarea");
+                            c();
+                        };
+                    });
+                }
+                ).then(
+                () => {
+                    toggleCmd.selected = true;
+                    return new WinJS.Promise((c) => {
+                        appBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.areEqual(toggleCmd.selected, projections.toggle.selected, "selected" + msg);
+                            c();
+                        };
+                    });
+                }
+                ).then(
+                () => {
+                    toggleCmd.selected = false;
+                    return new WinJS.Promise((c) => {
+                        appBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.areEqual(toggleCmd.selected, projections.toggle.selected, "selected" + msg);
+                            c();
+                        };
+                    });
+                }
+                ).then(
+                () => {
+                    var flyout = new WinJS.UI.Flyout();
+                    flyoutCmd.flyout = flyout;
+                    return new WinJS.Promise((c) => {
+                        appBar._commandingSurface._layoutCompleteCallback = () => {
+                            LiveUnit.Assert.areEqual(flyoutCmd.flyout, projections.flyout.flyout, "flyout" + msg);
+                            flyout.dispose();
+                            c();
+                        };
+                    });
+                }
+                ).done(complete);
+        }
+
         testSelectionAndGlobalSection() {
+            // Values of "global" and "selection" are deprecated starting in WinJS 4.0.
+            // Makes sure they are both just parsed as "primary" commands.
             this._element.style.width = "1000px";
             var data = new WinJS.Binding.List([
                 new Command(null, { type: _Constants.typeButton, label: "opt 1", section: 'selection' }),
@@ -1344,44 +1525,13 @@ module CorsicaTests {
             });
         }
 
-        testOpenedPropertyConstructorOptions() {
-            var appBar = new AppBar();
-            LiveUnit.Assert.areEqual(_Constants.defaultOpened, appBar.opened, "opened property has incorrect default value");
-            appBar.dispose();
-
-            [true, false].forEach(function (initiallyOpen) {
-                appBar = new AppBar(null, { opened: initiallyOpen });
-                LiveUnit.Assert.areEqual(initiallyOpen, appBar.opened, "opened property does not match the value passed to the constructor.");
-                appBar.dispose();
-            })
-        }
-
-        testTogglingOpenedProperty() {
-            var data = new WinJS.Binding.List([
-                new Command(null, { type: _Constants.typeButton, icon: 'add', label: "button" }),
-                new Command(null, { type: _Constants.typeSeparator }),
-                new Command(null, { type: _Constants.typeButton, section: 'secondary', label: "secondary" })
-            ]);
-            var appBar = new AppBar(this._element, { data: data, opened: false });
-            Helper._CommandingSurface.useSynchronousAnimations(appBar._commandingSurface);
-            Helper.AppBar.verifyRenderedClosed(appBar);
-
-            appBar.opened = true;
-            LiveUnit.Assert.isTrue(appBar.opened, "opened property should be writeable.");
-            Helper.AppBar.verifyRenderedOpened(appBar);
-
-            appBar.opened = false;
-            LiveUnit.Assert.isFalse(appBar.opened, "opened property should be writeable.");
-            Helper.AppBar.verifyRenderedClosed(appBar);
-        }
-
         testPlacementConstructorOptions() {
             var appBar = new AppBar();
             LiveUnit.Assert.areEqual(_Constants.defaultPlacement, appBar.placement, "'placement' property has incorrect default value.");
             appBar.dispose();
 
             Object.keys(AppBar.Placement).forEach(function (placement) {
-                appBar = new AppBar(null, { placement: placement});
+                appBar = new AppBar(null, { placement: placement });
                 LiveUnit.Assert.areEqual(placement, appBar.placement, "placement does not match the value passed to the constructor.");
                 appBar.dispose();
             })
@@ -1418,7 +1568,7 @@ module CorsicaTests {
                 new Command(null, { type: _Constants.typeButton, section: 'secondary', label: "secondary" })
             ]);
             var appBar = new AppBar(this._element, { data: data, opened: false });
-            Helper._CommandingSurface.useSynchronousAnimations(appBar._commandingSurface);
+            Helper.AppBar.useSynchronousAnimations(appBar);
 
             appBar.open();
             LiveUnit.Assert.isTrue(appBar.opened)
@@ -1434,7 +1584,7 @@ module CorsicaTests {
 
             // Initialize opened.
             var appBar = new AppBar(this._element, { data: data, opened: true });
-            Helper._CommandingSurface.useSynchronousAnimations(appBar._commandingSurface);
+            Helper.AppBar.useSynchronousAnimations(appBar);
 
             var msg = "Opening an already opened AppBar should not fire events";
             appBar.onbeforeopen = failEventHandler(_Constants.EventNames.beforeOpen, msg);
@@ -1443,9 +1593,12 @@ module CorsicaTests {
             appBar.onafterclose = failEventHandler(_Constants.EventNames.afterClose, msg);
 
             // Verify nothing changes when opening again.
+            var originalOpenedRect = appBar.element.getBoundingClientRect();
             appBar.open();
             LiveUnit.Assert.isTrue(appBar.opened)
             Helper.AppBar.verifyRenderedOpened(appBar);
+            Helper.Assert.areBoundingClientRectsEqual(originalOpenedRect, appBar.element.getBoundingClientRect(),
+                "opening an opened AppBar should not affect its bounding client rect", 0);
         }
 
         testClose() {
@@ -1471,7 +1624,7 @@ module CorsicaTests {
 
             // Initialize closed.
             var appBar = new AppBar(this._element, { data: data, opened: false });
-            Helper._CommandingSurface.useSynchronousAnimations(appBar._commandingSurface);
+            Helper.AppBar.useSynchronousAnimations(appBar);
 
             var msg = "Closing an already closed AppBar should not fire events";
             appBar.onbeforeopen = failEventHandler(_Constants.EventNames.beforeOpen, msg);
@@ -1480,8 +1633,42 @@ module CorsicaTests {
             appBar.onafterclose = failEventHandler(_Constants.EventNames.afterClose, msg);
 
             // Verify nothing changes when closing again.
+            var originalClosedRect = appBar.element.getBoundingClientRect();
             appBar.close();
             LiveUnit.Assert.isFalse(appBar.opened)
+            Helper.AppBar.verifyRenderedClosed(appBar);
+            Helper.Assert.areBoundingClientRectsEqual(originalClosedRect, appBar.element.getBoundingClientRect(),
+                "closing a closed AppBar should not affect its bounding client rect", 0);
+        }
+
+        testOpenedPropertyConstructorOptions() {
+            var appBar = new AppBar();
+            LiveUnit.Assert.areEqual(_Constants.defaultOpened, appBar.opened, "opened property has incorrect default value");
+            appBar.dispose();
+
+            [true, false].forEach(function (initiallyOpen) {
+                appBar = new AppBar(null, { opened: initiallyOpen });
+                LiveUnit.Assert.areEqual(initiallyOpen, appBar.opened, "opened property does not match the value passed to the constructor.");
+                appBar.dispose();
+            })
+        }
+
+        testTogglingOpenedProperty() {
+            var data = new WinJS.Binding.List([
+                new Command(null, { type: _Constants.typeButton, icon: 'add', label: "button" }),
+                new Command(null, { type: _Constants.typeSeparator }),
+                new Command(null, { type: _Constants.typeButton, section: 'secondary', label: "secondary" })
+            ]);
+            var appBar = new AppBar(this._element, { data: data, opened: false });
+            Helper.AppBar.useSynchronousAnimations(appBar);
+            Helper.AppBar.verifyRenderedClosed(appBar);
+
+            appBar.opened = true;
+            LiveUnit.Assert.isTrue(appBar.opened, "opened property should be writeable.");
+            Helper.AppBar.verifyRenderedOpened(appBar);
+
+            appBar.opened = false;
+            LiveUnit.Assert.isFalse(appBar.opened, "opened property should be writeable.");
             Helper.AppBar.verifyRenderedClosed(appBar);
         }
 
@@ -1492,7 +1679,7 @@ module CorsicaTests {
                 new Command(null, { type: _Constants.typeButton, section: 'secondary', label: "secondary" })
             ]);
             var appBar = new AppBar(this._element, { data: data, opened: true });
-            Helper._CommandingSurface.useSynchronousAnimations(appBar._commandingSurface);
+            Helper.AppBar.useSynchronousAnimations(appBar);
 
             appBar._commandingSurface._dom.overflowButton.click()
             LiveUnit.Assert.isFalse(appBar.opened)
@@ -1517,7 +1704,7 @@ module CorsicaTests {
 
         testBeforeOpenIsCancelable() {
             var appBar = new AppBar(this._element, { opened: false });
-            Helper._CommandingSurface.useSynchronousAnimations(appBar._commandingSurface);
+            Helper.AppBar.useSynchronousAnimations(appBar);
 
             appBar.onbeforeopen = function (eventObject) {
                 eventObject.preventDefault();
@@ -1535,7 +1722,7 @@ module CorsicaTests {
 
         testBeforeCloseIsCancelable() {
             var appBar = new AppBar(this._element, { opened: true });
-            Helper._CommandingSurface.useSynchronousAnimations(appBar._commandingSurface);
+            Helper.AppBar.useSynchronousAnimations(appBar);
 
             appBar.onbeforeclose = function (eventObject) {
                 eventObject.preventDefault();
@@ -1572,18 +1759,170 @@ module CorsicaTests {
 <<<<<<< HEAD
 =======
 
-        testBackgroundColorPercolatesToCommandingSurface() {
-            // Verifies that background color changes to the AppBar are not impeded by the CommandingSurface element.
-            var appBar = new AppBar(this._element, { opened: true });
-            var commandingSurface = appBar._commandingSurface;
+        testPositionOffsetsAreCalculateAtConstructionTime() {
 
-            appBar.element.style.backgroundColor = "rgb(255, 100, 05)";
-            var appBarStyle = getComputedStyle(appBar.element),
-                commandingSurfaceStyle = getComputedStyle(commandingSurface.element);
+            var badOffset = "-1px";
 
-            var msg = "AppBar's commandingSurface element should match the background color of the AppBar element";
-            LiveUnit.LoggingCore.logComment("Test: " + msg);
-            LiveUnit.Assert.areEqual(appBarStyle.backgroundColor, commandingSurfaceStyle.backgroundColor, msg);
+            // Verify that the AppBar sets its element's inline style offsets during construction. This is to support scenarios where an AppBar
+            // is constructed while the IHM is already showing.
+            this._element.style.top = badOffset;
+            this._element.style.bottom = badOffset;
+            var appBar = new AppBar(this._element);
+            LiveUnit.Assert.areNotEqual(badOffset, this._element.style.top, "AppBar style.top should be set during construction.");
+            LiveUnit.Assert.areNotEqual(badOffset, this._element.style.bottom, "AppBar style.bottom should be set during construction.");
+        }
+
+        testPositionOffsetsAreUpdatedCorrectly(complete) {
+            // AppBar needs to be aware of the IHM when positioning itself to the top or bottom of the visible document.
+            // Verify scenarios that should update the AppBar element offsets.
+            var badOffset = "-1px";
+            var appBar = new AppBar(this._element, { placement: AppBar.Placement.bottom });
+
+            function resetOffsets() {
+                appBar.element.style.top = badOffset;
+                appBar.element.style.bottom = badOffset;
+                appBar._updateDomImpl_renderedState.adjustedOffsets = { top: badOffset, bottom: badOffset };
+            }
+
+            // Verify that updating AppBar's placement property will update the inline style offsets. Particularly important in scenarios
+            // Where placement is set while the IHM is already shown. AppBar's changing to top will have to clear IHM offsets and AppBars 
+            // changing to bottom will have to add them.
+            resetOffsets();
+            appBar.placement = AppBar.Placement.top;
+            LiveUnit.Assert.areNotEqual(badOffset, this._element.style.top, "Setting placement property should update AppBar style.top");
+            LiveUnit.Assert.areNotEqual(badOffset, this._element.style.bottom, "Setting placement property should update AppBar style.bottom");
+            resetOffsets();
+            appBar.placement = AppBar.Placement.bottom;
+            LiveUnit.Assert.areNotEqual(badOffset, this._element.style.top, "Setting placement should update AppBar style.top");
+            LiveUnit.Assert.areNotEqual(badOffset, this._element.style.bottom, "Setting placement should update AppBar style.bottom");
+
+            // Call the AppBar's IHM "showing" event handler to verify that AppBar offsets are updated in response to the IHM showing.
+            LiveUnit.Assert.areEqual(AppBar.Placement.bottom, appBar.placement, "TEST ERROR: scenario requires AppBar with placement 'bottom'");
+            var origFunc = AppBar.prototype._shouldAdjustForShowingKeyboard;
+            AppBar.prototype._shouldAdjustForShowingKeyboard = () => { return true; };
+            resetOffsets();
+            appBar._handleShowingKeyboard().then(() => {
+                LiveUnit.Assert.areNotEqual(badOffset, this._element.style.top, "AppBar should update style.top after IHM has finished showing");
+                LiveUnit.Assert.areNotEqual(badOffset, this._element.style.bottom, "AppBar should update style.bottom after IHM has finished showing");
+                AppBar.prototype._shouldAdjustForShowingKeyboard = origFunc;
+
+                // Call the AppBar's IHM "hiding" event handler to verify that the bottom AppBar offsets are updated in response to the IHM hiding.
+                LiveUnit.Assert.areEqual(AppBar.Placement.bottom, appBar.placement, "TEST ERROR: scenario requires AppBar with placement 'bottom'");
+                resetOffsets();
+                appBar._handleHidingKeyboard();
+                LiveUnit.Assert.areNotEqual(badOffset, this._element.style.top, "AppBar should update style.top when the IHM starts to hide");
+                LiveUnit.Assert.areNotEqual(badOffset, this._element.style.bottom, "AppBar should update style.bottom when the IHM starts to hide");
+
+                complete();
+            });
+        }
+
+        testGetCommandById() {
+            var data = new WinJS.Binding.List([
+                new Command(null, { type: _Constants.typeButton, label: "A", id: "extraneous"})
+            ]);
+
+            this._element.style.width = "10px";
+            var appBar = new AppBar(this._element, {
+                data: data
+            });
+            LiveUnit.Assert.isNull(appBar.getCommandById("someID"));
+
+            var firstAddedCommand = new Command(null, { type: _Constants.typeButton, label: "B", id: "someID" });
+            data.push(firstAddedCommand);
+            LiveUnit.Assert.areEqual(firstAddedCommand, appBar.getCommandById("someID"));
+
+            var secondAddedCommand = new Command(null, { type: _Constants.typeButton, label: "C", id: "someID" });
+            data.push(secondAddedCommand);
+
+            LiveUnit.Assert.areEqual(firstAddedCommand, appBar.getCommandById("someID"));
+        }
+
+        testShowOnlyCommands() {
+            var data = new WinJS.Binding.List([
+                new Command(null, { type: _Constants.typeButton, label: "A", id: "A" }),
+                new Command(null, { type: _Constants.typeButton, label: "B", id: "B" }),
+                new Command(null, { type: _Constants.typeButton, label: "C", id: "C" }),
+                new Command(null, { type: _Constants.typeButton, label: "D", id: "D" }),
+                new Command(null, { type: _Constants.typeButton, label: "E", id: "E" })
+            ]);
+
+            this._element.style.width = "10px";
+            var appBar = new AppBar(this._element, {
+                data: data
+            });
+
+            function checkCommandVisibility(expectedShown, expectedHidden) {
+                for (var i = 0, len = expectedShown.length; i < len; i++) {
+                    LiveUnit.Assert.areEqual("inline-block", appBar.getCommandById(expectedShown[i]).element.style.display);
+                }
+                for (var i = 0, len = expectedHidden.length; i < len; i++) {
+                    LiveUnit.Assert.areEqual("none", appBar.getCommandById(expectedHidden[i]).element.style.display);
+                }
+            }
+
+            appBar.showOnlyCommands([]);
+            checkCommandVisibility([], ["A", "B", "C", "D", "E"]);
+
+            appBar.showOnlyCommands(["A", "B", "C", "D", "E"]);
+            checkCommandVisibility(["A", "B", "C", "D", "E"], []);
+
+            appBar.showOnlyCommands(["A"]);
+            checkCommandVisibility(["A"], ["B", "C", "D", "E"]);
+
+            appBar.showOnlyCommands([data.getAt(1)]);
+            checkCommandVisibility(["B"], ["A", "C", "D", "E"]);
+
+            appBar.showOnlyCommands(["C", data.getAt(4)]);
+            checkCommandVisibility(["C", "E"], ["A", "B", "D"]);
+        }
+        
+        private _testLightDismissWithTrigger(dismissAppBar) {
+            var button = document.createElement("button");
+            button.textContent = "Initially Focused";
+            var element = document.createElement("div");
+            
+            this._element.appendChild(button);
+            this._element.appendChild(element);
+            
+            var appBar = new AppBar(element, {
+                data: new WinJS.Binding.List([
+                    new Command(null, { type: _Constants.typeButton, icon: 'add', label: "add" }),
+                    new Command(null, { type: _Constants.typeButton, icon: 'remove', label: "remove" }),
+                    new Command(null, { type: _Constants.typeButton, icon: 'accept', label: "accept" }),
+                    new Command(null, { type: _Constants.typeSeparator }),
+                    new Command(null, { type: _Constants.typeButton, section: 'secondary', label: "secondary" })
+                ])
+            });
+            Helper.AppBar.useSynchronousAnimations(appBar);
+            
+            return Helper.focus(button).then(() => {
+                LiveUnit.Assert.areEqual(button, document.activeElement, "Button should have focus initially");
+                
+                return Helper.waitForFocusWithin(appBar.element, () => { appBar.open(); });
+            }).then(() => {
+                LiveUnit.Assert.areEqual(appBar.data.getAt(0).element, document.activeElement,
+                    "AppBar's leftmost primary command should have focus after opening");
+                LiveUnit.Assert.isTrue(_LightDismissService.isTopmost(appBar._dismissable),
+                    "AppBar should be the topmost light dismissable");
+                
+                return Helper.waitForFocus(button, () => { dismissAppBar(appBar); });
+            }).then(() => {
+                LiveUnit.Assert.areEqual(button, document.activeElement,
+                    "Focus should have been restored to the button");
+                LiveUnit.Assert.isFalse(_LightDismissService.isShown(appBar._dismissable),
+                    "AppBar should not be in the light dismissable stack");
+            });
+        }
+        
+        testLightDismissWithClose(complete) {
+            this._testLightDismissWithTrigger((appBar) => { appBar.close(); }).then(complete);
+        }
+        testLightDismissWithDispose(complete) {
+            this._testLightDismissWithTrigger((appBar) => { appBar.dispose(); }).then(complete);
+        }
+        testLightDismissWithTap(complete) {
+            this._testLightDismissWithTrigger((appBar) => {  _LightDismissService._clickEaterTapped(); }).then(complete);
         }
 >>>>>>> upstream/master
     }
